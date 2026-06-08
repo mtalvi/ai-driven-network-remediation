@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture &amp; Implementation Status — AI-Driven Network Remediation</title>
+<style>
+  :root {
+    --bg: #181818;
+    --bg-elevated: #1e1e1e;
+    --bg-card: #232323;
+    --text-primary: #e4e4ebeb;
+    --text-secondary: #e4e4e48d;
+    --text-tertiary: #e4e4e45e;
+    --stroke: #e4e4e41f;
+    --stroke-light: #e4e4e414;
+    --accent: #599CE7;
+    --green: #2db87a;
+    --yellow: #d4a82d;
+    --orange: #e08030;
+    --pink: #d0588a;
+    --gray: #8888a8;
+    --red-bg: #c048481a;
+    --yellow-bg: #d4a82d1a;
+    --green-bg: #2db87a12;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    line-height: 1.5;
+    padding: 32px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 28px 0 12px; color: var(--text-primary); }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; }
+  .callout {
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    border-left: 3px solid;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .callout-warning { background: var(--yellow-bg); border-color: var(--yellow); }
+  .callout-danger { background: var(--red-bg); border-color: var(--pink); }
+  .callout-info { background: #599ce714; border-color: var(--accent); }
+  .callout-title { font-weight: 600; margin-bottom: 4px; }
+  .callout-warning .callout-title { color: var(--yellow); }
+  .callout-danger .callout-title { color: var(--pink); }
+  .callout-info .callout-title { color: var(--accent); }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat {
+    text-align: center;
+    padding: 12px 8px;
+    border-radius: 6px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--stroke-light);
+  }
+  .stat-value { font-size: 28px; font-weight: 700; line-height: 1.1; }
+  .stat-label { font-size: 11px; color: var(--text-secondary); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-success .stat-value { color: var(--green); }
+  .stat-warning .stat-value { color: var(--yellow); }
+  .stat-danger .stat-value { color: var(--pink); }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 10px 0;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 2px; }
+  .legend-sep { width: 1px; height: 16px; background: var(--stroke); }
+  .diagram-wrap { overflow-x: auto; margin-bottom: 8px; }
+  .diagram-wrap svg { min-width: 700px; }
+  .node-group { cursor: pointer; }
+  .node-group:hover .node-bg { stroke-opacity: 0.9 !important; stroke-width: 2 !important; }
+  .detail-panel {
+    border: 1px solid var(--stroke);
+    border-radius: 6px;
+    background: var(--bg-card);
+    padding: 16px;
+    margin-bottom: 24px;
+    display: none;
+  }
+  .detail-panel.active { display: block; }
+  .detail-title { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+  .detail-note { color: var(--text-secondary); font-size: 13px; margin-bottom: 10px; }
+  .detail-gaps-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+  .detail-gap { font-size: 12px; color: var(--text-secondary); padding-left: 8px; line-height: 1.6; }
+  .pill {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    vertical-align: middle;
+  }
+  .pill-done { background: #2db87a30; color: var(--green); }
+  .pill-partial { background: #d4a82d28; color: var(--yellow); }
+  .pill-stub { border: 1px solid var(--yellow); color: var(--yellow); background: transparent; }
+  .pill-not_started { background: #d0588a28; color: var(--pink); }
+  .pill-external { border: 1px solid var(--gray); color: var(--gray); background: transparent; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    margin-bottom: 24px;
+  }
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--stroke);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+  }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--stroke-light); vertical-align: top; }
+  tr:nth-child(even) td { background: #ffffff04; }
+  tr.row-danger td { background: #c048480d; }
+  tr.row-warning td { background: #d4a82d0a; }
+  .col-component { font-weight: 500; white-space: nowrap; }
+  .col-status { text-align: center; }
+  .col-gaps { color: var(--text-secondary); }
+  .priority-list { display: flex; flex-direction: column; gap: 10px; }
+  .divider { border: none; border-top: 1px solid var(--stroke-light); margin: 24px 0; }
+  .footer { color: var(--text-tertiary); font-size: 11px; margin-top: 32px; text-align: center; }
+  @media (max-width: 768px) {
+    body { padding: 16px; }
+    .stats { grid-template-columns: repeat(3, 1fr); }
+    h1 { font-size: 18px; }
+  }
+  @media print {
+    body { background: #fff; color: #222; padding: 16px; }
+    :root {
+      --bg: #fff; --bg-elevated: #f8f8f8; --bg-card: #f4f4f4;
+      --text-primary: #222; --text-secondary: #666; --text-tertiary: #999;
+      --stroke: #ddd; --stroke-light: #eee;
+    }
+    .callout { break-inside: avoid; }
+    .diagram-wrap { overflow: visible; }
+    .diagram-wrap svg { width: 100% !important; }
+    .detail-panel { display: none !important; }
+    table { font-size: 10px; }
+    td, th { padding: 4px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Architecture & Implementation Status</h1>
+<p class="subtitle">AI-Driven Network Remediation Quickstart — Project status as of June 2026</p>
+
+<div class="callout callout-warning">
+  <div class="callout-title">Critical Path</div>
+  The Agent Service (LangGraph) is the central integration hub — graph structure exists but all
+  8 nodes are placeholders with no MCP client, no LLM integration, no Kafka consumer, and no
+  Langfuse tracing. This is the primary gap between the README and working software.
+</div>
+
+<div class="stats">
+  <div class="stat stat-success"><div class="stat-value">7</div><div class="stat-label">Done</div></div>
+  <div class="stat stat-warning"><div class="stat-value">7</div><div class="stat-label">Partial</div></div>
+  <div class="stat stat-warning"><div class="stat-value">2</div><div class="stat-label">Stub</div></div>
+  <div class="stat stat-danger"><div class="stat-value">7</div><div class="stat-label">Not Started</div></div>
+  <div class="stat"><div class="stat-value">8/24</div><div class="stat-label">Connections Wired</div></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div> Done</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--yellow)"></div> Partial</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--orange)"></div> Stub</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--pink)"></div> Not Started</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--gray)"></div> External Dep</div>
+  <div class="legend-sep"></div>
+  <div class="legend-item">
+    <svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="var(--green)" stroke-width="2"/></svg>
+    Connected
+  </div>
+  <div class="legend-item">
+    <svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="var(--pink)" stroke-width="2" stroke-dasharray="5 3"/></svg>
+    Planned / not wired
+  </div>
+</div>
+
+<h2>Architecture Diagram</h2>
+<p class="subtitle" style="margin-bottom:8px">Click any component to see details below the diagram.</p>
+
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 680" width="100%" id="arch-svg">
+  <defs>
+    <marker id="ad" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="7" markerHeight="5" orient="auto">
+      <polygon points="0 0.5, 9 3.5, 0 6.5" fill="var(--green)" opacity="0.7"/>
+    </marker>
+    <marker id="ap" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="7" markerHeight="5" orient="auto">
+      <polygon points="0 0.5, 9 3.5, 0 6.5" fill="var(--pink)" opacity="0.6"/>
+    </marker>
+  </defs>
+
+  <!-- Layer bands -->
+  <rect x="0" y="2" width="980" height="66" rx="4" fill="var(--text-tertiary)" opacity="0.08"/>
+  <text x="8" y="14" fill="var(--text-tertiary)" font-size="9" font-weight="600" letter-spacing="0.8">ENTRY POINTS</text>
+  <rect x="0" y="84" width="980" height="68" rx="4" fill="var(--text-tertiary)" opacity="0.04"/>
+  <text x="8" y="96" fill="var(--text-tertiary)" font-size="9" font-weight="600" letter-spacing="0.8">BACKEND SERVICES</text>
+  <rect x="0" y="186" width="980" height="66" rx="4" fill="var(--text-tertiary)" opacity="0.08"/>
+  <text x="8" y="198" fill="var(--text-tertiary)" font-size="9" font-weight="600" letter-spacing="0.8">AI &amp; DATA</text>
+  <rect x="0" y="296" width="980" height="66" rx="4" fill="var(--text-tertiary)" opacity="0.04"/>
+  <text x="8" y="308" fill="var(--text-tertiary)" font-size="9" font-weight="600" letter-spacing="0.8">MCP TOOL SERVERS</text>
+  <rect x="0" y="406" width="980" height="66" rx="4" fill="var(--text-tertiary)" opacity="0.08"/>
+  <text x="8" y="418" fill="var(--text-tertiary)" font-size="9" font-weight="600" letter-spacing="0.8">INFRASTRUCTURE</text>
+  <rect x="0" y="510" width="980" height="66" rx="4" fill="var(--text-tertiary)" opacity="0.04"/>
+  <text x="8" y="522" fill="var(--text-tertiary)" font-size="9" font-weight="600" letter-spacing="0.8">EXTERNAL / PLATFORM</text>
+  <rect x="0" y="606" width="980" height="66" rx="4" fill="var(--text-tertiary)" opacity="0.08"/>
+  <text x="8" y="618" fill="var(--text-tertiary)" font-size="9" font-weight="600" letter-spacing="0.8">CROSS-CUTTING</text>
+
+  <!-- EDGES (rendered below nodes) -->
+  <!-- Implemented (solid green) -->
+  <line x1="405" y1="240" x2="745" y2="420" stroke="var(--green)" stroke-width="1.8" opacity="0.5" marker-end="url(#ad)"/><!-- ingestion→minio -->
+  <line x1="336" y1="230" x2="158" y2="220" stroke="var(--green)" stroke-width="1.8" opacity="0.5" marker-end="url(#ad)"/><!-- ingestion→llamastack -->
+  <line x1="89" y1="240" x2="228" y2="200" stroke="var(--green)" stroke-width="1.8" opacity="0.5" marker-end="url(#ad)"/><!-- llamastack→pgvector -->
+  <line x1="563" y1="350" x2="134" y2="524" stroke="var(--green)" stroke-width="1.8" opacity="0.5" marker-end="url(#ad)"/><!-- mcp_aap→aap -->
+  <line x1="721" y1="350" x2="312" y2="524" stroke="var(--green)" stroke-width="1.8" opacity="0.5" marker-end="url(#ad)"/><!-- mcp_sn→servicenow -->
+  <line x1="89" y1="350" x2="649" y2="524" stroke="var(--green)" stroke-width="1.8" opacity="0.5" marker-end="url(#ad)"/><!-- mcp_ocp→edge -->
+  <line x1="247" y1="350" x2="405" y2="420" stroke="var(--green)" stroke-width="1.8" opacity="0.5" marker-end="url(#ad)"/><!-- mcp_loki→lokistack -->
+  <line x1="790" y1="330" x2="810" y2="330" stroke="var(--green)" stroke-width="1.8" opacity="0.5" marker-end="url(#ad)"/><!-- mcp_sn→mcp_slack -->
+
+  <!-- Not implemented (dashed pink) -->
+  <line x1="490" y1="56" x2="371" y2="100" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.3" marker-end="url(#ap)"/><!-- frontend→chatbot -->
+  <line x1="440" y1="120" x2="540" y2="120" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.3" marker-end="url(#ap)"/><!-- chatbot→agent -->
+  <line x1="576" y1="140" x2="89" y2="200" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.3" marker-end="url(#ap)"/><!-- agent→llamastack -->
+  <line x1="609" y1="140" x2="563" y2="200" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.3" marker-end="url(#ap)"/><!-- agent→langfuse -->
+  <!-- Agent → 6 MCP servers -->
+  <line x1="580" y1="140" x2="89" y2="310" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.25" marker-end="url(#ap)"/>
+  <line x1="593" y1="140" x2="247" y2="310" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.25" marker-end="url(#ap)"/>
+  <line x1="603" y1="140" x2="405" y2="310" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.25" marker-end="url(#ap)"/>
+  <line x1="613" y1="140" x2="563" y2="310" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.25" marker-end="url(#ap)"/>
+  <line x1="623" y1="140" x2="721" y2="310" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.25" marker-end="url(#ap)"/>
+  <line x1="633" y1="140" x2="879" y2="310" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.25" marker-end="url(#ap)"/>
+  <!-- Kafka→Agent (curved left) -->
+  <path d="M 166 440 C 8 440 8 120 540 120" fill="none" stroke="var(--pink)" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.4" marker-end="url(#ap)"/>
+  <!-- MCP Kafka→Kafka -->
+  <line x1="405" y1="350" x2="235" y2="420" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.3" marker-end="url(#ap)"/>
+  <!-- MCP Slack→Slack -->
+  <line x1="879" y1="350" x2="490" y2="524" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.3" marker-end="url(#ap)"/>
+  <!-- Edge→Kafka -->
+  <line x1="599" y1="544" x2="304" y2="440" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.3" marker-end="url(#ap)"/>
+  <!-- ACM→Edge -->
+  <line x1="777" y1="544" x2="737" y2="544" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.3" marker-end="url(#ap)"/>
+  <!-- Grafana→Agent (alert pipeline) -->
+  <line x1="575" y1="420" x2="609" y2="140" stroke="var(--pink)" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.3" marker-end="url(#ap)"/>
+
+  <!-- Annotations -->
+  <text x="490" y="278" text-anchor="middle" fill="var(--pink)" font-size="9.5" font-style="italic" opacity="0.75">
+    Agent has no MCP client — 6 tool connections not wired
+  </text>
+  <text x="24" y="270" fill="var(--pink)" font-size="8.5" opacity="0.7">No consumer</text>
+  <text x="550" y="385" fill="var(--pink)" font-size="8.5" opacity="0.7" text-anchor="end">Alert pipeline</text>
+
+  <!-- NODES -->
+  <!-- Row 0: Frontend -->
+  <g class="node-group" data-id="frontend" onclick="showDetail('frontend')">
+    <rect class="node-bg" x="421" y="16" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--orange)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="421" y="19" width="3.5" height="34" fill="var(--orange)" rx="1"/>
+    <text x="492" y="33" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Frontend</text>
+    <text x="492" y="46" text-anchor="middle" fill="var(--orange)" font-size="8" font-weight="600">STUB</text>
+  </g>
+  <!-- Row 1: Backend -->
+  <g class="node-group" data-id="chatbot" onclick="showDetail('chatbot')">
+    <rect class="node-bg" x="302" y="100" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--orange)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="302" y="103" width="3.5" height="34" fill="var(--orange)" rx="1"/>
+    <text x="373" y="117" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Chatbot Service</text>
+    <text x="373" y="130" text-anchor="middle" fill="var(--orange)" font-size="8" font-weight="600">STUB</text>
+  </g>
+  <g class="node-group" data-id="agent" onclick="showDetail('agent')">
+    <rect class="node-bg" x="540" y="100" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--yellow)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="540" y="103" width="3.5" height="34" fill="var(--yellow)" rx="1"/>
+    <text x="611" y="117" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Agent Service</text>
+    <text x="611" y="130" text-anchor="middle" fill="var(--yellow)" font-size="8" font-weight="600">PARTIAL</text>
+  </g>
+  <!-- Row 2: AI & Data -->
+  <g class="node-group" data-id="llamastack" onclick="showDetail('llamastack')">
+    <rect class="node-bg" x="20" y="200" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--yellow)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="20" y="203" width="3.5" height="34" fill="var(--yellow)" rx="1"/>
+    <text x="91" y="217" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Llama Stack</text>
+    <text x="91" y="230" text-anchor="middle" fill="var(--yellow)" font-size="8" font-weight="600">PARTIAL</text>
+  </g>
+  <g class="node-group" data-id="pgvector" onclick="showDetail('pgvector')">
+    <rect class="node-bg" x="178" y="200" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--yellow)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="178" y="203" width="3.5" height="34" fill="var(--yellow)" rx="1"/>
+    <text x="249" y="217" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">PGVector</text>
+    <text x="249" y="230" text-anchor="middle" fill="var(--yellow)" font-size="8" font-weight="600">PARTIAL</text>
+  </g>
+  <g class="node-group" data-id="ingestion" onclick="showDetail('ingestion')">
+    <rect class="node-bg" x="336" y="200" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--green)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="336" y="203" width="3.5" height="34" fill="var(--green)" rx="1"/>
+    <text x="407" y="217" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Ingestion Pipeline</text>
+    <text x="407" y="230" text-anchor="middle" fill="var(--green)" font-size="8" font-weight="600">DONE</text>
+  </g>
+  <g class="node-group" data-id="langfuse" onclick="showDetail('langfuse')">
+    <rect class="node-bg" x="494" y="200" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--yellow)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="494" y="203" width="3.5" height="34" fill="var(--yellow)" rx="1"/>
+    <text x="565" y="217" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Langfuse</text>
+    <text x="565" y="230" text-anchor="middle" fill="var(--yellow)" font-size="8" font-weight="600">PARTIAL</text>
+  </g>
+  <g class="node-group" data-id="osai" onclick="showDetail('osai')">
+    <rect class="node-bg" x="652" y="200" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--pink)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="652" y="203" width="3.5" height="34" fill="var(--pink)" rx="1"/>
+    <text x="723" y="217" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">OpenShift AI</text>
+    <text x="723" y="230" text-anchor="middle" fill="var(--pink)" font-size="8" font-weight="600">NOT STARTED</text>
+  </g>
+  <g class="node-group" data-id="evaluation" onclick="showDetail('evaluation')">
+    <rect class="node-bg" x="810" y="200" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--pink)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="810" y="203" width="3.5" height="34" fill="var(--pink)" rx="1"/>
+    <text x="881" y="217" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Evaluation</text>
+    <text x="881" y="230" text-anchor="middle" fill="var(--pink)" font-size="8" font-weight="600">NOT STARTED</text>
+  </g>
+  <!-- Row 3: MCP Servers -->
+  <g class="node-group" data-id="mcp_ocp" onclick="showDetail('mcp_ocp')">
+    <rect class="node-bg" x="20" y="310" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--green)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="20" y="313" width="3.5" height="34" fill="var(--green)" rx="1"/>
+    <text x="91" y="327" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">MCP OpenShift</text>
+    <text x="91" y="340" text-anchor="middle" fill="var(--green)" font-size="8" font-weight="600">DONE</text>
+  </g>
+  <g class="node-group" data-id="mcp_loki" onclick="showDetail('mcp_loki')">
+    <rect class="node-bg" x="178" y="310" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--green)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="178" y="313" width="3.5" height="34" fill="var(--green)" rx="1"/>
+    <text x="249" y="327" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">MCP LokiStack</text>
+    <text x="249" y="340" text-anchor="middle" fill="var(--green)" font-size="8" font-weight="600">DONE</text>
+  </g>
+  <g class="node-group" data-id="mcp_kafka" onclick="showDetail('mcp_kafka')">
+    <rect class="node-bg" x="336" y="310" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--yellow)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="336" y="313" width="3.5" height="34" fill="var(--yellow)" rx="1"/>
+    <text x="407" y="327" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">MCP Kafka</text>
+    <text x="407" y="340" text-anchor="middle" fill="var(--yellow)" font-size="8" font-weight="600">PARTIAL</text>
+  </g>
+  <g class="node-group" data-id="mcp_aap" onclick="showDetail('mcp_aap')">
+    <rect class="node-bg" x="494" y="310" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--green)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="494" y="313" width="3.5" height="34" fill="var(--green)" rx="1"/>
+    <text x="565" y="327" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">MCP AAP</text>
+    <text x="565" y="340" text-anchor="middle" fill="var(--green)" font-size="8" font-weight="600">DONE</text>
+  </g>
+  <g class="node-group" data-id="mcp_sn" onclick="showDetail('mcp_sn')">
+    <rect class="node-bg" x="652" y="310" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--green)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="652" y="313" width="3.5" height="34" fill="var(--green)" rx="1"/>
+    <text x="723" y="327" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">MCP ServiceNow</text>
+    <text x="723" y="340" text-anchor="middle" fill="var(--green)" font-size="8" font-weight="600">DONE</text>
+  </g>
+  <g class="node-group" data-id="mcp_slack" onclick="showDetail('mcp_slack')">
+    <rect class="node-bg" x="810" y="310" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--yellow)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="810" y="313" width="3.5" height="34" fill="var(--yellow)" rx="1"/>
+    <text x="881" y="327" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">MCP Slack</text>
+    <text x="881" y="340" text-anchor="middle" fill="var(--yellow)" font-size="8" font-weight="600">PARTIAL</text>
+  </g>
+  <!-- Row 4: Infrastructure -->
+  <g class="node-group" data-id="kafka" onclick="showDetail('kafka')">
+    <rect class="node-bg" x="166" y="420" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--green)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="166" y="423" width="3.5" height="34" fill="var(--green)" rx="1"/>
+    <text x="235" y="437" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Kafka</text>
+    <text x="235" y="450" text-anchor="middle" fill="var(--green)" font-size="8" font-weight="600">DONE</text>
+  </g>
+  <g class="node-group" data-id="lokistack" onclick="showDetail('lokistack')">
+    <rect class="node-bg" x="336" y="420" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--yellow)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="336" y="423" width="3.5" height="34" fill="var(--yellow)" rx="1"/>
+    <text x="405" y="437" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">LokiStack</text>
+    <text x="405" y="450" text-anchor="middle" fill="var(--yellow)" font-size="8" font-weight="600">PARTIAL</text>
+  </g>
+  <g class="node-group" data-id="grafana" onclick="showDetail('grafana')">
+    <rect class="node-bg" x="506" y="420" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--yellow)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="506" y="423" width="3.5" height="34" fill="var(--yellow)" rx="1"/>
+    <text x="575" y="437" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Grafana</text>
+    <text x="575" y="450" text-anchor="middle" fill="var(--yellow)" font-size="8" font-weight="600">PARTIAL</text>
+  </g>
+  <g class="node-group" data-id="minio" onclick="showDetail('minio')">
+    <rect class="node-bg" x="676" y="420" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--green)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="676" y="423" width="3.5" height="34" fill="var(--green)" rx="1"/>
+    <text x="745" y="437" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">MinIO</text>
+    <text x="745" y="450" text-anchor="middle" fill="var(--green)" font-size="8" font-weight="600">DONE</text>
+  </g>
+  <!-- Row 5: External -->
+  <g class="node-group" data-id="aap" onclick="showDetail('aap')">
+    <rect class="node-bg" x="65" y="524" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--gray)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="65" y="527" width="3.5" height="34" fill="var(--gray)" rx="1"/>
+    <text x="136" y="541" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">AAP Controller</text>
+    <text x="136" y="554" text-anchor="middle" fill="var(--gray)" font-size="8" font-weight="600">EXTERNAL</text>
+  </g>
+  <g class="node-group" data-id="servicenow" onclick="showDetail('servicenow')">
+    <rect class="node-bg" x="243" y="524" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--gray)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="243" y="527" width="3.5" height="34" fill="var(--gray)" rx="1"/>
+    <text x="314" y="541" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">ServiceNow</text>
+    <text x="314" y="554" text-anchor="middle" fill="var(--gray)" font-size="8" font-weight="600">EXTERNAL</text>
+  </g>
+  <g class="node-group" data-id="slack_api" onclick="showDetail('slack_api')">
+    <rect class="node-bg" x="421" y="524" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--gray)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="421" y="527" width="3.5" height="34" fill="var(--gray)" rx="1"/>
+    <text x="492" y="541" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Slack</text>
+    <text x="492" y="554" text-anchor="middle" fill="var(--gray)" font-size="8" font-weight="600">EXTERNAL</text>
+  </g>
+  <g class="node-group" data-id="edge" onclick="showDetail('edge')">
+    <rect class="node-bg" x="599" y="524" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--pink)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="599" y="527" width="3.5" height="34" fill="var(--pink)" rx="1"/>
+    <text x="670" y="541" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Edge Cluster</text>
+    <text x="670" y="554" text-anchor="middle" fill="var(--pink)" font-size="8" font-weight="600">NOT STARTED</text>
+  </g>
+  <g class="node-group" data-id="acm" onclick="showDetail('acm')">
+    <rect class="node-bg" x="777" y="524" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--pink)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="777" y="527" width="3.5" height="34" fill="var(--pink)" rx="1"/>
+    <text x="848" y="541" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">ACM</text>
+    <text x="848" y="554" text-anchor="middle" fill="var(--pink)" font-size="8" font-weight="600">NOT STARTED</text>
+  </g>
+  <!-- Row 6: Cross-cutting -->
+  <g class="node-group" data-id="cicd" onclick="showDetail('cicd')">
+    <rect class="node-bg" x="203" y="620" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--green)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="203" y="623" width="3.5" height="34" fill="var(--green)" rx="1"/>
+    <text x="274" y="637" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">CI/CD</text>
+    <text x="274" y="650" text-anchor="middle" fill="var(--green)" font-size="8" font-weight="600">DONE</text>
+  </g>
+  <g class="node-group" data-id="otel" onclick="showDetail('otel')">
+    <rect class="node-bg" x="421" y="620" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--pink)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="421" y="623" width="3.5" height="34" fill="var(--pink)" rx="1"/>
+    <text x="492" y="637" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">Observability (OTel)</text>
+    <text x="492" y="650" text-anchor="middle" fill="var(--pink)" font-size="8" font-weight="600">NOT STARTED</text>
+  </g>
+  <g class="node-group" data-id="mlops" onclick="showDetail('mlops')">
+    <rect class="node-bg" x="639" y="620" width="138" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--pink)" stroke-width="1" stroke-opacity="0.55"/>
+    <rect x="639" y="623" width="3.5" height="34" fill="var(--pink)" rx="1"/>
+    <text x="710" y="637" text-anchor="middle" fill="var(--text-primary)" font-size="10.5" font-weight="500">MLOps / Training</text>
+    <text x="710" y="650" text-anchor="middle" fill="var(--pink)" font-size="8" font-weight="600">NOT STARTED</text>
+  </g>
+</svg>
+</div>
+
+<div class="detail-panel" id="detail-panel">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+    <span class="detail-title" id="detail-title"></span>
+    <span id="detail-pill"></span>
+  </div>
+  <div class="detail-note" id="detail-note"></div>
+  <div id="detail-gaps-section" style="display:none">
+    <div class="detail-gaps-title">Gaps / TODO:</div>
+    <div id="detail-gaps"></div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<h2>Detailed Component Status</h2>
+
+<table>
+  <thead>
+    <tr><th>Component</th><th class="col-status">Status</th><th>Working Connections</th><th>Key Gaps / TODO</th></tr>
+  </thead>
+  <tbody>
+    <tr class="row-warning"><td class="col-component">Frontend</td><td class="col-status"><span class="pill pill-stub">Stub</span></td><td>None</td><td class="col-gaps">Entire UI; not deployed; POC React dashboard not ported</td></tr>
+    <tr class="row-warning"><td class="col-component">Chatbot Service</td><td class="col-status"><span class="pill pill-stub">Stub</span></td><td>Helm deploy, health probes</td><td class="col-gaps">Only GET /api/hello; no agent integration</td></tr>
+    <tr><td class="col-component">Agent Service (LangGraph)</td><td class="col-status"><span class="pill pill-partial">Partial</span></td><td>Graph structure, routing logic, unit tests</td><td class="col-gaps">All 8 nodes placeholders; no MCP/LLM/Kafka/Langfuse; not in Helm</td></tr>
+    <tr><td class="col-component">Llama Stack</td><td class="col-status"><span class="pill pill-partial">Partial</span></td><td>Subchart deployed; ingestion pipeline connected</td><td class="col-gaps">Agent doesn't use for completions or RAG retrieval</td></tr>
+    <tr><td class="col-component">PGVector</td><td class="col-status"><span class="pill pill-partial">Partial</span></td><td>Subchart deployed; Llama Stack internal use</td><td class="col-gaps">No quickstart seed script; agent doesn't query</td></tr>
+    <tr><td class="col-component">Ingestion Pipeline</td><td class="col-status"><span class="pill pill-done">Done</span></td><td>MinIO upload, Llama Stack ingest, 10 runbooks, CI tested</td><td class="col-gaps">No auto-run on deploy; agent doesn't retrieve yet</td></tr>
+    <tr><td class="col-component">Langfuse (LLM Obs.)</td><td class="col-status"><span class="pill pill-partial">Partial</span></td><td>Helm values, deploy scripts, make targets</td><td class="col-gaps">No app integration; disabled by default</td></tr>
+    <tr class="row-danger"><td class="col-component">OpenShift AI</td><td class="col-status"><span class="pill pill-not_started">Not Started</span></td><td>None</td><td class="col-gaps">POC only; no InferenceService; requires GPU</td></tr>
+    <tr class="row-danger"><td class="col-component">Evaluation</td><td class="col-status"><span class="pill pill-not_started">Not Started</span></td><td>None</td><td class="col-gaps">No eval framework, benchmarks, or golden datasets</td></tr>
+    <tr><td class="col-component">MCP OpenShift</td><td class="col-status"><span class="pill pill-done">Done</span></td><td>6 tools, edge RBAC, unit + integration tests</td><td class="col-gaps">Destructive tools untested in integration</td></tr>
+    <tr><td class="col-component">MCP LokiStack</td><td class="col-status"><span class="pill pill-done">Done</span></td><td>5 tools, HTTP client, extensive tests</td><td class="col-gaps">LLM query robustness hardening in progress; agent doesn't call yet</td></tr>
+    <tr><td class="col-component">MCP Kafka</td><td class="col-status"><span class="pill pill-partial">Partial</span></td><td>4 tools with real kafka-python</td><td class="col-gaps">Wrong KAFKA_BOOTSTRAP default; no tests</td></tr>
+    <tr><td class="col-component">MCP AAP</td><td class="col-status"><span class="pill pill-done">Done</span></td><td>5 tools, AAP mock, comprehensive tests</td><td class="col-gaps">Real AAP credentials empty; agent doesn't call</td></tr>
+    <tr><td class="col-component">MCP ServiceNow</td><td class="col-status"><span class="pill pill-done">Done</span></td><td>4 tools, dual mode, mock + Slack cross-notify</td><td class="col-gaps">No PDI bootstrap script for real instance</td></tr>
+    <tr><td class="col-component">MCP Slack</td><td class="col-status"><span class="pill pill-partial">Partial</span></td><td>4 tools with real Slack API</td><td class="col-gaps">No SLACK_BOT_TOKEN wiring in Helm; no tests</td></tr>
+    <tr><td class="col-component">Kafka</td><td class="col-status"><span class="pill pill-done">Done</span></td><td>KRaft StatefulSet, 5 topics, TLS, external route</td><td class="col-gaps">Single broker dev config; nginx-logs topic missing</td></tr>
+    <tr><td class="col-component">LokiStack</td><td class="col-status"><span class="pill pill-partial">Partial</span></td><td>Full chart (CR, Grafana, CLF, RBAC)</td><td class="col-gaps">Disabled by default; requires Loki Operator; OpenShift-only</td></tr>
+    <tr><td class="col-component">MinIO</td><td class="col-status"><span class="pill pill-done">Done</span></td><td>StatefulSet, secrets, used by ingestion + Loki</td><td class="col-gaps">Buckets created at runtime</td></tr>
+    <tr><td class="col-component">Grafana</td><td class="col-status"><span class="pill pill-partial">Partial</span></td><td>Deployed via LokiStack chart; Loki datasource configured</td><td class="col-gaps">Alert pipeline to Agent not wired; can replace OTel as primary observability path</td></tr>
+    <tr class="row-danger"><td class="col-component">Edge Cluster</td><td class="col-status"><span class="pill pill-not_started">Not Started</span></td><td>CI simulates with pause pod</td><td class="col-gaps">Empty placeholder; POC has full edge workloads + EDA; add vCluster or Kind for edge simulation in CI</td></tr>
+    <tr class="row-danger"><td class="col-component">ACM</td><td class="col-status"><span class="pill pill-not_started">Not Started</span></td><td>None</td><td class="col-gaps">Empty cross-cluster/; POC has manifests; manual enrollment</td></tr>
+    <tr><td class="col-component">CI/CD</td><td class="col-status"><span class="pill pill-done">Done</span></td><td>PR checks, Kind e2e, image build workflow</td><td class="col-gaps">LokiStack/Kafka/Slack tools not covered</td></tr>
+    <tr class="row-danger"><td class="col-component">Observability (OTel)</td><td class="col-status"><span class="pill pill-not_started">Not Started</span></td><td>Dependencies listed in pyproject.toml</td><td class="col-gaps">Consider Grafana (already deployed) as primary observability path; no instrumentation yet</td></tr>
+    <tr class="row-danger"><td class="col-component">MLOps / Training</td><td class="col-status"><span class="pill pill-not_started">Not Started</span></td><td>None</td><td class="col-gaps">Need MLflow for experiment tracking and model registry; no training pipelines</td></tr>
+  </tbody>
+</table>
+
+<hr class="divider">
+
+<h2>Additional Modules Identified</h2>
+<p class="subtitle">Not in the original module list but present in codebase or implied by architecture.</p>
+<table>
+  <thead><tr><th>Module</th><th class="col-status">Status</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="col-component">AAP Mock</td><td class="col-status"><span class="pill pill-done">Done</span></td><td>FastAPI mock with seed templates; deployed in CI</td></tr>
+    <tr><td class="col-component">ServiceNow Mock</td><td class="col-status"><span class="pill pill-done">Done</span></td><td>In-memory Table API mock; deployed in CI</td></tr>
+    <tr><td class="col-component">Ansible Playbooks</td><td class="col-status"><span class="pill pill-partial">Partial</span></td><td>Only 2 playbooks (restart-nginx, hello_world); blocked on real AAP controller instance to develop more</td></tr>
+    <tr class="row-danger"><td class="col-component">EDA (Event-Driven Ansible)</td><td class="col-status"><span class="pill pill-not_started">Not Started</span></td><td>Key part of POC fast-path; not ported to quickstart</td></tr>
+    <tr class="row-danger"><td class="col-component">Failure Simulator</td><td class="col-status"><span class="pill pill-not_started">Not Started</span></td><td>CronJob in POC for OOM injection; not in quickstart</td></tr>
+    <tr><td class="col-component">Documentation</td><td class="col-status"><span class="pill pill-partial">Partial</span></td><td>README, manual-deploy, langfuse-deploy, REST examples</td></tr>
+  </tbody>
+</table>
+
+<hr class="divider">
+
+<h2>Priority Actions</h2>
+<div class="priority-list">
+  <div class="callout callout-danger">
+    <div class="callout-title">P0 — Wire the Agent Service</div>
+    Port the POC agent (auto-darknoc agent.py) into hub/agent-service: add MCP client, LLM/OpenAI
+    client, Kafka consumer loop, Langfuse tracing. Create Helm template and image build. This
+    unblocks the entire remediation loop.
+  </div>
+  <div class="callout callout-warning">
+    <div class="callout-title">P1 — Fix MCP Kafka Bootstrap</div>
+    Set KAFKA_BOOTSTRAP to kafka.hub.svc:9092 in Helm values. Add unit and integration tests for
+    MCP Kafka tools.
+  </div>
+  <div class="callout callout-warning">
+    <div class="callout-title">P1 — Wire Slack Token in Helm</div>
+    Add SLACK_BOT_TOKEN to mcp-secrets template. Add basic tests for MCP Slack tools.
+  </div>
+  <div class="callout callout-info">
+    <div class="callout-title">P2 — Remaining Integration</div>
+    Frontend UI (port POC React dashboard or build new), Chatbot-to-Agent proxy,
+    ServiceNow PDI bootstrap, Edge workloads + ClusterLogForwarder, ACM enrollment,
+    OpenShift AI / RHOAI model serving, OpenTelemetry instrumentation, post-install ingestion Job.
+  </div>
+</div>
+
+<div class="footer">
+  AI-Driven Network Remediation Quickstart &mdash; Red Hat AI Quickstarts &mdash; Generated June 2026
+</div>
+
+<script>
+const details = {
+  frontend:   { label: "Frontend",              status: "stub",        pill: "pill-stub",        note: "Python print stub; no UI code",                                       gaps: ["Entire UI needs building","POC React dashboard not ported","Not in Helm chart or image builds"] },
+  chatbot:    { label: "Chatbot Service",        status: "stub",        pill: "pill-stub",        note: "GET /api/hello only",                                                  gaps: ["No chat endpoints","No agent integration","No CORS or auth"] },
+  agent:      { label: "Agent Service",          status: "partial",     pill: "pill-partial",     note: "Graph skeleton; all 8 nodes are placeholders",                         gaps: ["No MCP client code","No LLM / OpenAI client","No Kafka consumer loop","No Langfuse tracing","Not in Helm chart or image builds","Largest gap between README and reality"] },
+  llamastack: { label: "Llama Stack",            status: "partial",     pill: "pill-partial",     note: "Subchart deployed; used by ingestion only",                            gaps: ["Not used by agent for completions","Not used by agent for RAG retrieval","External LLM endpoint required (ADNR_LLM_*)"] },
+  pgvector:   { label: "PGVector",               status: "partial",     pill: "pill-partial",     note: "Subchart deployed; used internally by Llama Stack",                    gaps: ["No quickstart seed script","Agent doesn't query directly","POC seed script not ported"] },
+  ingestion:  { label: "Ingestion Pipeline",     status: "done",        pill: "pill-done",        note: "RAG pipeline working and CI-tested",                                   gaps: ["No auto-run Job on deploy","Agent doesn't retrieve from vector store yet"] },
+  langfuse:   { label: "Langfuse",               status: "partial",     pill: "pill-partial",     note: "Helm values and deploy scripts exist; no app wiring",                  gaps: ["No agent-service integration","Disabled by default (ENABLE_LANGFUSE)","No OTel bridge"] },
+  osai:       { label: "OpenShift AI",           status: "not_started", pill: "pill-not_started", note: "Not in quickstart; POC has full RHOAI stack",                          gaps: ["No InferenceService manifest","No DataScienceCluster","Requires GPU node","Quickstart uses external LLM endpoint"] },
+  evaluation: { label: "Evaluation",             status: "not_started", pill: "pill-not_started", note: "No eval framework in quickstart",                                     gaps: ["No RCA quality benchmarks","No golden datasets","No regression tests","POC has E2E test scenarios only"] },
+  mcp_ocp:    { label: "MCP OpenShift",          status: "done",        pill: "pill-done",        note: "6 tools; unit + integration tests",                                    gaps: ["Destructive tools not tested in integration","Requires manual setup-edge-rbac.sh"] },
+  mcp_loki:   { label: "MCP LokiStack",          status: "done",        pill: "pill-done",        note: "5 tools; extensive tests; LLM query robustness hardening in progress", gaps: ["Making LogQL generation robust against common LLM mistakes","Depends on LokiStack deployment (off by default)","Agent doesn't call these tools"] },
+  mcp_kafka:  { label: "MCP Kafka",              status: "partial",     pill: "pill-partial",     note: "4 tools coded; wrong default bootstrap",                               gaps: ["KAFKA_BOOTSTRAP points to POC namespace","No unit tests","No integration tests beyond health","Helm env not set correctly"] },
+  mcp_aap:    { label: "MCP AAP",                status: "done",        pill: "pill-done",        note: "5 tools; mock + real; comprehensive tests",                            gaps: ["Real AAP credentials empty by default","Agent doesn't call these tools"] },
+  mcp_sn:     { label: "MCP ServiceNow",         status: "done",        pill: "pill-done",        note: "4 tools; dual mode (mock/real); tested",                               gaps: ["No PDI bootstrap script for real instance","No real ServiceNow integration tests"] },
+  mcp_slack:  { label: "MCP Slack",              status: "partial",     pill: "pill-partial",     note: "4 tools coded; no token wiring in Helm",                               gaps: ["SLACK_BOT_TOKEN not injected by Helm","No unit tests","No integration tests","Silent failure without token"] },
+  kafka:      { label: "Kafka",                  status: "done",        pill: "pill-done",        note: "KRaft chart; 5 topics; TLS; external route",                           gaps: ["Single broker (dev config)","nginx-logs topic not in quickstart topic list","Production HA not configured"] },
+  lokistack:  { label: "LokiStack",              status: "partial",     pill: "pill-partial",     note: "Full chart (CR, Grafana, CLF, RBAC)",                                  gaps: ["Disabled by default (ENABLE_LOKISTACK=false)","Requires Loki Operator on cluster","OpenShift-only (Routes, OAuth)","LOKI_TLS_VERIFY=false in dev"] },
+  minio:      { label: "MinIO",                  status: "done",        pill: "pill-done",        note: "StatefulSet with secret; working in CI",                               gaps: ["Buckets created at runtime only"] },
+  grafana:    { label: "Grafana",               status: "partial",     pill: "pill-partial",     note: "Deployed via LokiStack chart; alert pipeline to agent planned",         gaps: ["Alert pipeline to Agent not wired (Grafana alert → webhook/Kafka → Agent)","Dashboard templates from POC not ported","Can serve as primary observability path, potentially replacing standalone OTel stack"] },
+  aap:        { label: "AAP Controller",         status: "external",    pill: "pill-external",    note: "Mock in dev/CI; real needs credentials",                               gaps: [] },
+  servicenow: { label: "ServiceNow",             status: "external",    pill: "pill-external",    note: "Mock in dev/CI; PDI setup TBD",                                       gaps: [] },
+  slack_api:  { label: "Slack",                  status: "external",    pill: "pill-external",    note: "Requires bot token from workspace",                                   gaps: [] },
+  edge:       { label: "Edge Cluster",           status: "not_started", pill: "pill-not_started", note: "Empty placeholder; CI uses simulated namespace",                       gaps: ["edge/ contains only .gitkeep","POC has nginx, failure simulator, EDA","Real edge needs ACM + log forwarder","Add vCluster or Kind for edge cluster simulation in CI/CD","No edge workload manifests in quickstart"] },
+  acm:        { label: "ACM",                    status: "not_started", pill: "pill-not_started", note: "Not in quickstart; POC has manifests",                                 gaps: ["cross-cluster/ is empty","Required for real hub-spoke topology","Manual cluster enrollment needed"] },
+  cicd:       { label: "CI/CD",                  status: "done",        pill: "pill-done",        note: "PR checks + Kind e2e + image build",                                   gaps: ["LokiStack tools not tested in CI","Kafka MCP tools not tested beyond health","Slack MCP not tested"] },
+  otel:       { label: "Observability (OTel)",    status: "not_started", pill: "pill-not_started", note: "Deps in pyproject.toml only; Grafana (already deployed) may serve as primary observability path", gaps: ["Consider Grafana as observability foundation instead of standalone OTel","No instrumentation in any service","No Prometheus metrics endpoints","No collectors or exporters","POC has 5 Grafana dashboards"] },
+  mlops:      { label: "MLOps / Training",       status: "not_started", pill: "pill-not_started", note: "Not in scope; inference only; MLflow needed for experiment tracking",  gaps: ["Need MLflow for experiment tracking and model registry","No training pipelines","No fine-tuning jobs"] },
+};
+
+const statusLabels = { done: "Done", partial: "Partial", stub: "Stub", not_started: "Not Started", external: "External" };
+
+let selectedId = null;
+
+function showDetail(id) {
+  const panel = document.getElementById('detail-panel');
+  const d = details[id];
+  if (!d) return;
+
+  if (selectedId === id) {
+    panel.classList.remove('active');
+    highlightNode(selectedId, false);
+    selectedId = null;
+    return;
+  }
+
+  if (selectedId) highlightNode(selectedId, false);
+  selectedId = id;
+  highlightNode(id, true);
+
+  document.getElementById('detail-title').textContent = d.label;
+  document.getElementById('detail-pill').innerHTML = '<span class="pill ' + d.pill + '">' + statusLabels[d.status] + '</span>';
+  document.getElementById('detail-note').textContent = d.note;
+
+  const gapsSection = document.getElementById('detail-gaps-section');
+  const gapsEl = document.getElementById('detail-gaps');
+  if (d.gaps.length > 0) {
+    gapsSection.style.display = 'block';
+    gapsEl.innerHTML = d.gaps.map(function(g) { return '<div class="detail-gap">\u2022 ' + g + '</div>'; }).join('');
+  } else {
+    gapsSection.style.display = 'none';
+  }
+  panel.classList.add('active');
+}
+
+function highlightNode(id, on) {
+  var g = document.querySelector('[data-id="' + id + '"]');
+  if (!g) return;
+  var rect = g.querySelector('.node-bg');
+  if (rect) {
+    rect.setAttribute('stroke-width', on ? '2.5' : '1');
+    rect.setAttribute('stroke-opacity', on ? '1' : '0.55');
+  }
+}
+</script>
+
+</body>
+</html>
