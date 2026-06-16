@@ -253,6 +253,15 @@ edge-rbac-teardown:
 		| oc delete -n $(EDGE_NAMESPACE) --ignore-not-found -f -
 	oc delete secret noc-openshift-edge-kubeconfig -n $(NAMESPACE) --ignore-not-found
 
+EDGE_WORKLOAD_IMAGE ?= registry.k8s.io/pause:3.10
+
+.PHONY: deploy-edge-workload
+deploy-edge-workload:
+	oc create namespace $(EDGE_NAMESPACE) 2>/dev/null ||:
+	oc create deployment edge-worker --image=$(EDGE_WORKLOAD_IMAGE) --replicas=1 -n $(EDGE_NAMESPACE) 2>/dev/null \
+		|| echo "edge-worker deployment already exists, skipping"
+	oc wait --for=condition=available deployment/edge-worker -n $(EDGE_NAMESPACE) --timeout=60s
+
 .PHONY: _langfuse-deploy
 _langfuse-deploy:
 	helm repo add $(LANGFUSE_CHART_REPO) $(LANGFUSE_CHART_URL) || true

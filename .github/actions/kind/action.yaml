@@ -38,10 +38,7 @@ runs:
       shell: bash
 
     - name: Create edge namespace with dummy workloads
-      run: |
-        oc create namespace dark-noc-edge
-        oc create deployment edge-worker --image=registry.k8s.io/pause:3.10 --replicas=1 -n dark-noc-edge
-        oc wait --for=condition=available deployment/edge-worker -n dark-noc-edge --timeout=60s
+      run: make deploy-edge-workload EDGE_NAMESPACE=dark-noc-edge
       shell: bash
 
     - name: Prepare in-cluster kubeconfig for edge namespace
