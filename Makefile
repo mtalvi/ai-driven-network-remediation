@@ -143,6 +143,7 @@ helm_all_args = \
 	--set image.frontend=noc-frontend \
 	--set image.tag=$(VERSION) \
 	--set global.routes.enabled=$(ROUTES_ENABLED) \
+	--set edgeRbac.enabled=$(ROUTES_ENABLED) \
 	--set-string edgeRbac.edgeNamespace='$(EDGE_NAMESPACE)' \
 	--set-string mcp-servers.mcp-servers.noc-openshift.env.DEFAULT_NAMESPACE='$(EDGE_NAMESPACE)' \
 	$(helm_infra_args) \

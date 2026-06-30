@@ -403,7 +403,7 @@ servicenowMock:
 # ══════════════════════════════════════════════════════════════════════
 
 edgeRbac:
-  enabled: true
+  enabled: false
   edgeNamespace: "hub"
   edgeApiServer: "https://kubernetes.default.svc"
   serviceAccountName: "default"
