@@ -1,7 +1,11 @@
+{{- if .Values.servicenowMock.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: servicenow-mock
+  labels:
+    app: servicenow-mock
+    {{- include "hub.labels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:
@@ -14,12 +18,13 @@ spec:
     spec:
       containers:
         - name: servicenow-mock
-          image: localhost:5001/noc-servicenow-mock:ci
+          image: "{{ .Values.servicenowMock.image.repository }}:{{ .Values.servicenowMock.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: 8080
           env:
             - name: API_KEY
-              value: "demo-api-key-2026"
+              value: {{ .Values.servicenowMock.apiKey | quote }}
           readinessProbe:
             httpGet:
               path: /healthz
@@ -31,9 +36,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: servicenow-mock
+  labels:
+    app: servicenow-mock
+    {{- include "hub.labels" . | nindent 4 }}
 spec:
   selector:
     app: servicenow-mock
   ports:
     - port: 8080
       targetPort: 8080
+{{- end }}
