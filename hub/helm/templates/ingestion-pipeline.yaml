@@ -17,6 +17,25 @@ spec:
         {{- include "hub.labels" . | nindent 8 }}
         app.kubernetes.io/component: ingestion-pipeline
     spec:
+      initContainers:
+        - name: wait-for-minio
+          image: "curlimages/curl:latest"
+          command: ["sh", "-c"]
+          args:
+            - |
+              until curl -sf http://{{ .Values.minio.host }}:{{ .Values.minio.port }}/minio/health/ready; do
+                echo "Waiting for MinIO..."
+                sleep 3
+              done
+        - name: wait-for-autorag
+          image: "curlimages/curl:latest"
+          command: ["sh", "-c"]
+          args:
+            - |
+              until curl -sf http://{{ .Values.ingestionPipeline.llamastackHost }}:{{ index .Values "llama-stack" "port" }}/health; do
+                echo "Waiting for AutoRAG LlamaStack..."
+                sleep 5
+              done
       containers:
         - name: ingestion-pipeline
           image: "{{ .Values.image.registry }}/{{ .Values.image.ingestionPipeline }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
