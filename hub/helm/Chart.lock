@@ -8,5 +8,20 @@ dependencies:
 - name: mcp-servers
   repository: https://rh-ai-quickstart.github.io/ai-architecture-charts
   version: 0.5.17
-digest: sha256:b635649169903c785aa8a26373c15295b458c9c35d4b7c2de857509dd2af47e7
-generated: "2026-06-09T10:48:50.419663+03:00"
+- name: kafka
+  repository: file://charts/kafka
+  version: 0.1.0
+- name: minio
+  repository: file://charts/minio
+  version: 0.5.5
+- name: milvus
+  repository: file://charts/milvus
+  version: 0.1.0
+- name: autorag
+  repository: file://charts/autorag
+  version: 0.1.0
+- name: lokistack
+  repository: file://charts/lokistack
+  version: 0.1.0
+digest: sha256:e47c22bfd98bddee674150f87fe56a55cc62a391e5dc02a703abcefc86cd22cb
+generated: "2026-06-29T15:02:56.239707011+03:00"
