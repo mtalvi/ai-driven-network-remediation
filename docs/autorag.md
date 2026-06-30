@@ -13,7 +13,7 @@ AutoRAG is an OpenShift AI (3.4) feature that automatically finds the best RAG c
 | Data Science Pipelines enabled | `spec.components.aipipelines.managementState: Managed` |
 | Dashboard enabled | `spec.components.dashboard.managementState: Managed` |
 | Foundation model endpoint (Granite/vLLM) | Set `ADNR_LLM_ID`, `ADNR_LLM_URL`, `ADNR_LLM_TOKEN` env vars |
-| MinIO deployed | `make minio-install` (already part of `make helm-install`) |
+| MinIO deployed | Included in `make helm-install` (minio subchart) |
 
 ## Architecture
 
@@ -51,12 +51,8 @@ export ADNR_LLM_ID="granite-3.3-8b-instruct"
 export ADNR_LLM_URL="https://your-vllm-endpoint/v1"
 export ADNR_LLM_TOKEN="your-token"
 
-# Deploy everything (includes Milvus + LlamaStackDistribution)
+# Deploy everything (includes Milvus, AutoRAG, MinIO, Kafka — all in parallel)
 make helm-install
-
-# Or deploy AutoRAG components standalone
-make milvus-install
-make autorag-install
 ```
 
 ## Check Status
@@ -134,8 +130,7 @@ make helm-uninstall && make helm-install
 ## Teardown
 
 ```bash
-make autorag-uninstall
-make milvus-uninstall
+make helm-uninstall
 ```
 
 ## Limitations (Technology Preview)
