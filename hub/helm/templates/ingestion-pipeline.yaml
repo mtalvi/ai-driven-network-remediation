@@ -32,7 +32,7 @@ spec:
           command: ["sh", "-c"]
           args:
             - |
-              until curl -sf http://{{ .Values.ingestionPipeline.llamastackHost }}:{{ index .Values "llama-stack" "port" }}/health; do
+              until curl -sf http://{{ .Values.ingestionPipeline.llamastackHost }}:{{ index .Values "llama-stack" "port" }}/v1/models; do
                 echo "Waiting for AutoRAG LlamaStack..."
                 sleep 5
               done
