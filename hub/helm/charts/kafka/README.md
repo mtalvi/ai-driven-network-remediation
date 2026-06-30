@@ -33,7 +33,7 @@ TLS certificates and the external route hostname are generated automatically by 
 To override the auto-discovered hostname:
 
 ```bash
-helm upgrade --install kafka hub/infra/kafka --set kafka.externalRoute.host=kafka.mydomain.com
+helm upgrade --install kafka hub/helm/charts/kafka --set kafka.externalRoute.host=kafka.mydomain.com
 ```
 
 ## Access
@@ -136,7 +136,7 @@ for msg in consumer:
 
 ## Configuration
 
-Edit `hub/infra/kafka/values.yaml`:
+Edit `hub/helm/charts/kafka/values.yaml`:
 
 - **Disable Kafka**: Set `kafka.enabled: false`
 - **Disable Kafka UI**: Set `kafkaUI.enabled: false`
