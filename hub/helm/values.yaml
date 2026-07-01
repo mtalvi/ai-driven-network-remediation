@@ -183,7 +183,6 @@ minio:
 
 # ── Milvus (subchart: charts/milvus) ──────────────────────────────
 milvus:
-  enabled: true
   milvus:
     image:
       repository: milvusdb/milvus
@@ -406,8 +405,7 @@ edgeRbac:
   enabled: false
   edgeNamespace: "hub"
   edgeApiServer: "https://kubernetes.default.svc"
-  serviceAccountName: "default"
-  image: "registry.redhat.io/openshift4/ose-cli:latest"
+  image: "registry.redhat.io/openshift4/ose-cli:v4.17"
 
 # ══════════════════════════════════════════════════════════════════════
 # Hub application services

@@ -29,7 +29,7 @@ dependencies:
   - name: milvus
     version: 0.1.0
     repository: "file://charts/milvus"
-    condition: milvus.enabled
+    condition: autorag.enabled
   - name: autorag
     version: 0.1.0
     repository: "file://charts/autorag"

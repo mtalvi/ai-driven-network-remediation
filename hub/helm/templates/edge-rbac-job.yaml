@@ -17,10 +17,10 @@ spec:
         app: edge-rbac-setup
     spec:
       restartPolicy: OnFailure
-      serviceAccountName: {{ .Values.edgeRbac.serviceAccountName | default "default" }}
+      serviceAccountName: {{ include "hub.fullname" . }}-edge-rbac
       containers:
         - name: setup
-          image: {{ .Values.edgeRbac.image | default "registry.redhat.io/openshift4/ose-cli:latest" }}
+          image: {{ .Values.edgeRbac.image | default "registry.redhat.io/openshift4/ose-cli:v4.17" }}
           command:
             - /bin/bash
             - -c
