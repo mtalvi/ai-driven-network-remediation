@@ -68,22 +68,21 @@ runs:
       run: |
         make helm-install REGISTRY=localhost:5001 ROUTES_ENABLED=false ENABLE_KAFKA_UI=false \
           ENABLE_SERVICENOW_MOCK=true \
-          AUTORAG_HELM_EXTRA_ARGS="--set llamaStack.distributionImage=docker.io/ogxai/distribution-starter:1.1.2 --wait=false" \
           HELM_EXTRA_ARGS="\
+            --set mcpSecrets.openshift.create=true \
             --set-file mcpSecrets.openshift.kubeconfig=/tmp/edge-kubeconfig \
             --set mcp-servers.mcp-servers.noc-lokistack.enabled=false \
             --set mcp-servers.mcp-servers.noc-aap.env.AAP_URL=http://aap-mock.hub.svc:8080 \
-            --set mcp-servers.mcp-servers.noc-aap.env.AAP_VERIFY_SSL=false" \
-          KAFKA_HELM_EXTRA_ARGS="\
-            --set kafka.storage.storageClass=standard \
-            --set kafka.storage.size=256Mi \
-            --set kafka.retention.hours=1 \
-            --set kafka.retention.bytes=10485760 \
-            --set kafka.resources.requests.cpu=100m \
-            --set kafka.resources.requests.memory=256Mi \
-            --set kafka.resources.limits.cpu=500m \
-            --set kafka.resources.limits.memory=512Mi \
-            --set-string kafka.jvmHeapOpts='-Xmx384m -Xms256m'"
+            --set mcp-servers.mcp-servers.noc-aap.env.AAP_VERIFY_SSL=false \
+            --set autorag.llamaStack.distributionImage=docker.io/ogxai/distribution-starter:1.1.2 \
+            --set kafka.kafka.storage.storageClass=standard \
+            --set kafka.kafka.storage.size=256Mi \
+            --set kafka.kafka.retention.hours=1 \
+            --set kafka.kafka.resources.requests.cpu=100m \
+            --set kafka.kafka.resources.requests.memory=256Mi \
+            --set kafka.kafka.resources.limits.cpu=500m \
+            --set kafka.kafka.resources.limits.memory=512Mi \
+            --set-string kafka.kafka.jvmHeapOpts='-Xmx384m -Xms256m'"
       shell: bash
 
     - name: Wait for Kafka topics to be created
