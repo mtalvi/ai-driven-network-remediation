@@ -405,7 +405,7 @@ edgeRbac:
   enabled: false
   edgeNamespace: "hub"
   edgeApiServer: "https://kubernetes.default.svc"
-  image: "registry.redhat.io/openshift4/ose-cli:v4.17"
+  image: "image-registry.openshift-image-registry.svc:5000/openshift/cli:latest"
 
 # ══════════════════════════════════════════════════════════════════════
 # Hub application services

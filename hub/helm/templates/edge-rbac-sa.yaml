@@ -5,6 +5,10 @@ metadata:
   name: {{ include "hub.fullname" . }}-edge-rbac
   labels:
     {{- include "hub.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -12,6 +16,10 @@ metadata:
   name: {{ include "hub.fullname" . }}-edge-rbac
   labels:
     {{- include "hub.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
 rules:
   - apiGroups: [""]
     resources: ["namespaces", "serviceaccounts", "secrets"]
@@ -26,6 +34,10 @@ metadata:
   name: {{ include "hub.fullname" . }}-edge-rbac
   labels:
     {{- include "hub.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

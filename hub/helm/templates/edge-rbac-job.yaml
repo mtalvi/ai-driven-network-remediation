@@ -20,7 +20,7 @@ spec:
       serviceAccountName: {{ include "hub.fullname" . }}-edge-rbac
       containers:
         - name: setup
-          image: {{ .Values.edgeRbac.image | default "registry.redhat.io/openshift4/ose-cli:v4.17" }}
+          image: {{ .Values.edgeRbac.image | default "image-registry.openshift-image-registry.svc:5000/openshift/cli:latest" }}
           command:
             - /bin/bash
             - -c
