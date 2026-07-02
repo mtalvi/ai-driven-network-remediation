@@ -31,20 +31,21 @@ spec:
               HUB_NAMESPACE="{{ .Release.Namespace }}"
               EDGE_SERVER="{{ .Values.edgeRbac.edgeApiServer | default "https://kubernetes.default.svc" }}"
               SA_NAME=noc-openshift-mcp
+              SCOPED_NAME="noc-openshift-mcp-${EDGE_NAMESPACE}"
 
               oc create namespace "$EDGE_NAMESPACE" 2>/dev/null || true
 
-              cat <<'RBAC_EOF' | sed "s/EDGE_NAMESPACE_PLACEHOLDER/$EDGE_NAMESPACE/g" | oc apply -n "$EDGE_NAMESPACE" -f -
+              cat <<RBAC_EOF | oc apply -n "$EDGE_NAMESPACE" -f -
               ---
               apiVersion: v1
               kind: ServiceAccount
               metadata:
-                name: noc-openshift-mcp
+                name: ${SA_NAME}
               ---
               apiVersion: rbac.authorization.k8s.io/v1
               kind: ClusterRole
               metadata:
-                name: noc-openshift-mcp
+                name: ${SCOPED_NAME}
               rules:
                 - apiGroups: [""]
                   resources: ["namespaces"]
@@ -68,22 +69,22 @@ spec:
               apiVersion: rbac.authorization.k8s.io/v1
               kind: ClusterRoleBinding
               metadata:
-                name: noc-openshift-mcp
+                name: ${SCOPED_NAME}
               roleRef:
                 apiGroup: rbac.authorization.k8s.io
                 kind: ClusterRole
-                name: noc-openshift-mcp
+                name: ${SCOPED_NAME}
               subjects:
                 - kind: ServiceAccount
-                  name: noc-openshift-mcp
-                  namespace: EDGE_NAMESPACE_PLACEHOLDER
+                  name: ${SA_NAME}
+                  namespace: ${EDGE_NAMESPACE}
               ---
               apiVersion: v1
               kind: Secret
               metadata:
-                name: noc-openshift-mcp-token
+                name: ${SA_NAME}-token
                 annotations:
-                  kubernetes.io/service-account.name: noc-openshift-mcp
+                  kubernetes.io/service-account.name: ${SA_NAME}
               type: kubernetes.io/service-account-token
               RBAC_EOF
 
