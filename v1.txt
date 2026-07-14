@@ -1,0 +1,440 @@
+Milestone 1: AI-Driven Network Remediation Quickstart
+Owners: Matan Talvi
+Last Updated: Jul 13, 2026
+1. Milestone Overview
+What This Milestone Is About
+Milestone 1 delivers a focused, minimal end-to-end flow that proves the core detection-to-agent workflow. Logs are forwarded from the edge to the agent-service via Kafka. The agent-service filter logs and proceeds to analyze only Warning/Error logs. Analyzed logs get enriched with additional context and a remediation/escalation/on-the-fly AAP is produced accordingly.
+Main Goal
+Demonstrate that the system can autonomously detect an issue from logs, route it through a real event pipeline, and trigger an agentic workflow that investigates the problem, retrieves relevant runbook context, reasons about a remediation, and outputs an actionable plan — all without human intervention.
+Why This Milestone Matters
+This iteration validates the foundational architecture: real observability (Loki + Grafana), real messaging (Kafka), and a working AI agent (LangGraph + OGX + Granite). Every future capability — multi-cluster support, complex escalation flows, production-grade UI — builds on this proven https://github.com/mtalvi/quickstart-factory.gitfoundation. Delivering this milestone gives the team and stakeholders confidence that the core technical approach works, and provides a concrete, demoable artifact for the Red Hat AI Quickstarts catalog.
+
+
+
+2. Current Implementation Status (can also be seen here)
+What Is Already Implemented
+Component
+Status
+Details
+MCP tool servers (6)
+Complete
+OpenShift, LokiStack, Kafka, AAP, Slack, ServiceNow — implemented with FastMCP, exposing tools over streamable-http.
+Ingestion pipeline
+Complete
+Syncs 10 runbook Markdown files to MinIO, ingests into Llama Stack + pgvector with chunking (800 tokens, 80 overlap). Auto-ingest on startup via background thread with graceful fallback.
+Kafka infrastructure
+Complete
+KRaft-mode StatefulSet with 5 topics (system-alerts, noc-alerts, remediation-jobs, agent-events, incident-audit).
+MinIO
+Complete
+Object storage for runbooks and Loki logs. StatefulSet with console UI.
+LokiStack chart
+Complete
+Helm chart with LokiStack CR, Grafana, ClusterLogForwarder, MCP RBAC, and test log generator.
+AAP mock
+Complete
+FastAPI mock of AAP v2 API (job templates, launch, status, stdout).
+ServiceNow mock
+Complete
+FastAPI mock of ServiceNow Table API (incidents, users).
+Helm chart
+Complete
+Umbrella chart deploying pgvector, Llama Stack, MCP servers, and all application services.
+CI/CD pipeline
+Complete
+GitHub Actions: unit tests on PR, full E2E on Kind cluster with local registry.
+Integration tests
+Complete
+Test suites for all MCP servers, agent service, chatbot, and ingestion pipeline via port-forwards.
+Makefile orchestration
+Complete
+Build, push, deploy, test, and teardown targets with feature flags.
+LlamaStack / OGX
+Complete
+KBs, LLM (Granite) and MCP servers are correctly registered on OGX. It means that the agent layer can be potentially used from LangGraph.
+Agent service
+Complete
+LangGraph graph with real nodes: normalize, rag_retrieval, analyze (Granite LLM), decide (threshold routing), remediate (AAP), lightspeed (OLS), escalate (ServiceNow), notify (Slack), audit (Kafka). Kafka consumer wired into FastAPI lifespan. Supports confidence_override and failure_type_override for deterministic demo routing.
+Chatbot service
+Complete
+FastAPI BFF with /api/summary, /api/chat, /api/demo/trigger, /api/integrations endpoints. Reads incident-audit from Kafka, computes SLO metrics, provides executive brief via LLM chat, and publishes demo events with routing overrides.
+Frontend
+Complete
+React 19 + Vite dashboard with StatusCards, IncidentTimeline, SloPanel, BusinessImpact, ChatPanel, DemoTrigger, DegradedBanner, IntegrationMatrix, and ErrorBoundary. Served via Nginx with API proxy. Polls BFF every 5 seconds.
+Slack notifications
+Complete
+Real Slack Bot integration via slack-sdk. Block Kit messages with severity colors, status emojis, and ServiceNow ticket links. Posts to #ai-driven-network channel.
+Lightspeed integration
+Complete
+Real Red Hat Ansible Lightspeed (OLS) integration. Generates remediation playbooks on the fly for novel failure types. NetworkPolicy configured for cross-namespace access. LIGHTSPEED_SKIP_AAP flag for demo mode.
+
+What Is Partially Implemented or Incomplete
+Component
+Status
+Gap
+Grafana alerting
+Not started
+Grafana is deployed by the LokiStack chart, but no alert rules or notification channels (Kafka contact point) are configured. Demo uses manual trigger buttons instead.
+Agent ↔ MCP (investigate)
+Not wired
+The agent does not call mcp-openshift or mcp-lokistack to gather live evidence (get_pods, get_events, search_logs). It uses the raw log event directly. The MCP tools exist but are not called in the current graph topology.
+AAP execution (Lightspeed path)
+Skipped for demo
+The lightspeed node generates the playbook via OLS but does not execute it in AAP (LIGHTSPEED_SKIP_AAP=true). The lightspeed-runner AAP template does not exist.
+Human-in-the-loop escalation
+Not started
+The escalate node creates a ServiceNow ticket but there is no human feedback loop or approval workflow.
+Langfuse observability
+Not started
+No Langfuse trace integration for LLM call observability.
+
+
+3. Scope of the First Milestone
+What We Want to Achieve
+Log-Forwarding: Logs from the edge pods are forwarded to the hub via Kafka.
+Agent-Service Filter: The agent service filters the logs for Error/Warning logs (only these log types will be proceeded to be analyzed). 
+Agentic workflow: The agent service runs the LangGraph remediation workflow:
+Ingests the alert event.
+Investigates the issue using MCP tools (queries pod status, events, and logs via mcp-openshift and mcp-lokistack).
+Retrieves relevant runbook context from the vector store (RAG).
+Calls the LLM (Granite) with the full picture (alert + investigation evidence + runbook context) to analyze the issue and produce a root cause analysis.
+Decides on a remediation action:
+Remediation - runs a known, pre-existing AAP job template (e.g. restart-nginx) to fix the issue, or falls back to a direct OpenShift API call (e.g. rollout restart) if AAP fails.
+Escalation - creates a ServiceNow incident ticket and sends a Slack alert so a human can handle it manually; the graph doesn't wait for a response.
+Lightspeed - dynamically generates a new Ansible playbook on-the-fly based on the RCA output, then runs it through AAP. Unlike remediate which uses a fixed template, lightspeed creates a custom playbook tailored to the specific incident 
+Send a simple notification.
+Create an audit event to a separate Kafka topic with all the details.
+Simple frontend / chatbot: A minimal UI or chatbot that makes the workflow visible and demoable.
+Single-cluster deployment: Everything runs on one OpenShift cluster, using namespaces to simulate edge.
+What Is In Scope
+Real Loki + Grafana for log collection and alerting.
+Real Kafka as the event backbone (not mocked).
+Agent service consuming Kafka events and running the full LangGraph graph.
+Agent integration with MCP tool servers (at minimum: OpenShift, LokiStack, AAP).
+Agent integration with an LLM (Granite via Llama Stack or direct model URL).
+RAG context retrieval from the ingested runbooks.
+Agent producing a remediation plan (playbook selection, action description).
+Simple notification (Slack message or log output; no complex MCP workflow).
+Simple frontend or chatbot for demo purposes.
+Happy path only.
+Single-cluster (single namespace simulating edge).
+What Is Explicitly Out of Scope
+Full multi-cluster deployment or ACM integration.
+Complex Slack MCP integration (processing Slack responses, threaded workflows).
+Human-in-the-loop escalation flow.
+Unhappy path handling (retry logic, fallback strategies, error recovery).
+Full Llama Stack integration if model URL/token can be passed directly.
+Full production-grade frontend.
+High-scale Kafka or infrastructure tuning.
+Full Ansible/AAP remediation execution (mock/demo capability is sufficient).
+Multiple remediation retry logic.
+Langfuse observability integration.
+Assumptions and Dependencies
+An OpenShift cluster is available with sufficient resources for Loki Operator, Kafka, MinIO, and the application stack.
+The Loki Operator is installed on the cluster (prerequisite for LokiStack CR).
+A Granite model endpoint is accessible (either via RHOAI MaaS or a remote vLLM instance).
+The existing MCP tool servers work correctly as-is and do not require modifications for V1.
+The ingestion pipeline and runbook corpus are sufficient for the demo scenario.
+4. Required Work / TODOs
+Agent Service
+#
+Task
+Description
+Status
+1
+Kafka consumer
+Add a Kafka consumer to the agent service that listens on system-alerts / noc-alerts and triggers the LangGraph workflow when an alert arrives.
+Done
+2
+MCP client integration
+Integrate an MCP client so graph nodes can call MCP tool servers (OpenShift, LokiStack, AAP, etc.). Implemented via LlamaStack tool-runtime/invoke endpoint.
+Done
+3
+Wire normalize node (formerly ingest)
+Parse the incoming Kafka/Grafana alert payload into structured LogEvent state that downstream nodes can use.
+Done
+4
+Wire RAG retrieval node (formerly context)
+Query the Llama Stack vector store (noc_runbooks) using the alert details to retrieve relevant runbook snippets.
+Done
+5
+Wire analyze node
+Call the LLM (Granite) with the log event + RAG runbook context to produce a real RootCauseAnalysis (failure_type, confidence, severity, recommended_actions). Supports confidence_override + failure_type_override for deterministic demo routing.
+Done
+6
+Wire decide node
+Threshold-based routing: confidence >= 0.8 + known type → remediate, confidence >= 0.8 + unknown type → lightspeed, confidence < 0.7 → escalate.
+Done
+7
+Wire remediate node
+Maps recommended_actions to AAP job template names via keyword matching and failure_type fallback. Launches job via MCP AAP, polls until completion.
+Done
+8
+Wire lightspeed node
+Calls Red Hat Ansible Lightspeed (OLS) with RCA context to generate a remediation playbook. Extracts YAML, names the playbook, optionally executes in AAP. LIGHTSPEED_SKIP_AAP flag for demo.
+Done
+9
+Wire escalate node
+Creates a ServiceNow incident via MCP ServiceNow (create_incident) with failure details and RCA summary.
+Done
+10
+Wire notify node
+Sends Slack Block Kit message with severity colors, status emojis, resolution summary. Real slack-sdk integration with bot token.
+Done
+11
+Wire audit node
+Publishes full incident state as JSON to Kafka incident-audit topic.
+Done
+12
+Update graph topology for V1
+normalize → rag_retrieval → analyze → decide → {remediate|lightspeed|escalate} → notify → audit → END. Conditional retry loop on remediate.
+Done
+13
+Deterministic routing for demos
+Extract _overrides from Kafka event JSON to inject confidence_override + failure_type_override, guaranteeing specific paths for demo scenarios.
+Done
+
+Chatbot / Frontend
+#
+Task
+Description
+Status
+14
+Chatbot BFF
+FastAPI service with /api/summary (SLO metrics from Kafka audit), /api/chat (LLM-powered executive brief), /api/demo/trigger (publish demo events with routing overrides), /api/integrations (dependency health).
+Done
+15
+React dashboard
+React 19 + Vite SPA: StatusCards, IncidentTimeline, SloPanel, BusinessImpact, ChatPanel, DemoTrigger, DegradedBanner, IntegrationMatrix, ErrorBoundary. Polls BFF every 5s. Served via Nginx.
+Done
+16
+Demo trigger buttons
+Frontend buttons for CrashLoop, OOM, Lightspeed, and Escalation scenarios. Each publishes a Kafka event with appropriate routing overrides.
+Done
+
+Infrastructure and Deployment
+#
+Task
+Description
+Status
+17
+Demo workload
+Deploy a workload in the simulated edge namespace (dark-noc-edge) that can be made to fail on demand (e.g., an nginx pod that OOMKills or crashes).
+Done (via demo trigger buttons — simulated events, no real pod failure needed)
+18
+Kafka topic ordering
+Ensure Kafka is deployed and topics are created before the agent service starts consuming. The Makefile already handles this order, but verify end-to-end.
+Done
+19
+LLM model registration
+Ensure the Granite model is registered in Llama Stack and that the agent can reach it.
+Done (Granite 4.0 8B via LlamaStack)
+20
+Ingestion pipeline auto-ingest
+Auto-sync runbooks from local storage to MinIO and ingest into vector store on startup. Background thread with graceful fallback. Init containers for dependency readiness.
+Done
+21
+Lightspeed NetworkPolicy
+Create NetworkPolicy allowing hub-mtalvi namespace to reach OLS service in openshift-lightspeed namespace on port 8443.
+Done
+22
+Lightspeed ServiceAccount + RBAC
+Create noc-lightspeed-client SA with lightspeed-operator-query-access ClusterRole binding and long-lived token for OLS authentication.
+Done
+
+Grafana Alerting
+#
+Task
+Description
+Status
+11
+Create alert rules
+Define Grafana alert rules in LokiStack that detect the demo scenario (e.g., OOMKilled pods, CrashLoopBackOff, high error rates).
+Not done (demo uses manual trigger buttons instead)
+12
+Kafka contact point
+Configure a Grafana notification channel (contact point) that publishes alerts to a Kafka topic (e.g., system-alerts).
+Not done (demo uses manual trigger buttons instead)
+
+Testing
+#
+Task
+Description
+Status
+23
+Integration tests for wired nodes
+Updated integration tests covering real agent flow (Kafka event → agent → MCP calls → output). CI runs on Kind cluster.
+Done
+24
+Unit tests
+196 unit tests for agent-service (92.78% coverage), 29 for chatbot-service. Coverage enforced at 90% minimum.
+Done
+25
+CI stability
+Disabled auto-ingest in CI, added init container retry limits, added diagnostic steps for ingestion-pipeline failures.
+Done
+
+Documentation
+#
+Task
+Description
+Status
+26
+Demo runbook
+Step-by-step instructions for running both demo flows (CrashLoop + Lightspeed). See docs/LIGHTSPEED-DEMO-SCRIPT.md.
+Done
+27
+Frontend documentation
+FRONTEND.md documenting V1 dashboard components, _deps integration, and demo flow progression.
+Done
+
+5. Expected End-to-End Flow
+Two demo flows are implemented:
+
+Flow 1: CrashLoop (Known Failure → AAP Remediation)
+1. Demo trigger publishes a CrashLoopBackOff event to Kafka system-alerts topic.
+2. Agent service Kafka consumer picks up the event and invokes the LangGraph workflow.
+3. Normalize: Parses JSON into structured LogEvent (namespace, pod, container, site).
+4. RAG Retrieval: Queries LlamaStack vector store for relevant runbook context.
+5. Analyze: Calls Granite LLM with log event + RAG context → produces RootCauseAnalysis (failure_type=CrashLoopBackOff, confidence ~0.9, recommended_actions=["restart nginx service"]).
+6. Decide: confidence >= 0.8 AND CrashLoopBackOff is a known playbook type → routes to remediate.
+7. Remediate: Maps "restart nginx service" → restart-nginx template, launches AAP job via MCP, polls until success.
+8. Notify: Sends Slack message → "✅ Remediated via aap (job 42)" with severity color and incident details.
+9. Audit: Publishes full incident record to Kafka incident-audit topic → dashboard updates.
+
+Flow 2: Lightspeed (Novel Failure → AI-Generated Playbook)
+1. Demo trigger publishes a DNSFailure event with _overrides (confidence_override=0.95, failure_type_override=DNSFailure) to Kafka.
+2. Agent service Kafka consumer picks up the event, extracts overrides, and invokes the LangGraph workflow with overrides in state.
+3. Normalize: Parses JSON into structured LogEvent.
+4. RAG Retrieval: Queries vector store for DNS-related runbook context.
+5. Analyze: Overrides bypass the LLM → synthetic RCA with confidence=0.95, failure_type=DNSFailure.
+6. Decide: confidence >= 0.8 AND DNSFailure is NOT in known playbook types → routes to lightspeed.
+7. Lightspeed: Sends prompt with failure context to Red Hat Ansible Lightspeed (OLS). OLS generates a complete Ansible remediation playbook in ~8-12 seconds ("remediate-dnsfailure-in-openshift-cluster"). AAP execution skipped (LIGHTSPEED_SKIP_AAP=true).
+8. Notify: Sends Slack message → "Playbook Generated: remediate-dnsfailure-in-openshift-cluster" with incident details.
+9. Audit: Publishes record to incident-audit → dashboard updates.
+
+6. What We Want to Demonstrate
+Demo Scenario 1: CrashLoop Remediation
+"Known Failures Resolved in Seconds" — A CrashLoopBackOff event is detected and remediated autonomously via a pre-built AAP playbook.
+Trigger: Click "Trigger CrashLoop Demo" button in the dashboard.
+Pipeline: Alert flows through Kafka to the agent service.
+Analysis: RAG retrieves relevant runbook context. Granite LLM analyzes the failure and produces root cause analysis with high confidence.
+Decision: Agent determines this is a known failure type with high confidence → routes to remediate.
+Execution: AAP job template (restart-nginx) is launched and completes successfully.
+Notification: Slack message confirms resolution. Dashboard shows "Resolved" status.
+
+Demo Scenario 2: Lightspeed Playbook Generation
+"Novel Failures Get AI-Generated Remediation" — A DNS failure with no pre-built template is handled by generating a custom playbook via Ansible Lightspeed.
+Trigger: Click "Trigger Lightspeed Demo" button in the dashboard.
+Pipeline: Alert flows through Kafka with deterministic routing overrides.
+Analysis: Overrides bypass LLM, injecting DNSFailure with high confidence.
+Decision: Agent determines this is NOT a known playbook type → routes to Lightspeed.
+Generation: OLS analyzes the incident context and generates a complete Ansible remediation playbook (~8-12 seconds).
+Notification: Slack message confirms playbook generation. Dashboard shows the incident in timeline.
+
+What Success Looks Like
+The audience sees two distinct failure scenarios handled autonomously without human intervention.
+The CrashLoop flow shows the standard remediation path: known failure → pre-built playbook → resolved.
+The Lightspeed flow shows the AI-creative path: novel failure → Lightspeed generates custom playbook → notified.
+Both flows produce real Slack notifications visible in the #ai-driven-network channel.
+The dashboard provides a unified view of all incidents, SLO metrics, and business impact.
+The system uses real infrastructure (real Kafka, real LLM, real OLS, real Slack) — not mocked plumbing.
+Each demo flow completes in under 30 seconds from trigger to notification.
+
+What the Demo Should Prove
+Aspect
+What It Proves
+Technical
+The LangGraph agent architecture works: state flows through nodes, MCP tools are callable, LLM produces meaningful analysis, RAG retrieves relevant context.
+Architectural
+The event-driven pipeline (Kafka → agent → decision → action) is viable for autonomous NOC operations.
+Functional
+The system can detect a real (simulated) issue, reason about it with AI, and produce an actionable remediation — either from a known template or generated on the fly.
+Lightspeed Integration
+For novel failure types without pre-built playbooks, Red Hat Ansible Lightspeed can generate production-quality remediation in seconds.
+Extensibility
+The modular architecture (MCP servers, graph nodes, Helm chart) is designed for future expansion (multi-cluster, escalation, human-in-the-loop).
+
+7. Success Criteria
+This milestone is considered complete when:
+#
+Criterion
+Verification
+Status
+1
+The alert event is published to a Kafka topic via demo trigger.
+Click trigger button; verify event arrives in system-alerts.
+Done
+2
+The agent service consumes the Kafka event and runs the full LangGraph workflow.
+Check agent logs showing all graph nodes executing in sequence (normalize → rag → analyze → decide → action → notify → audit).
+Done
+3
+The RAG retrieval node retrieves relevant runbook snippets from the vector store.
+Verify HTTP 200 from LlamaStack vector_stores/search in agent logs.
+Done
+4
+The analyze node calls the Granite LLM and produces a meaningful RootCauseAnalysis.
+Inspect LLM response: failure_type, confidence, severity, and recommended_actions are coherent. (CrashLoop flow uses real LLM; Lightspeed flow uses overrides.)
+Done
+5
+The decide node correctly routes to the appropriate path.
+CrashLoop → remediate, Lightspeed → lightspeed. Verified in logs.
+Done
+6
+The remediate node launches an AAP job and reports success.
+Agent logs show tool-runtime/invoke calls and successful job completion.
+Done
+7
+The lightspeed node calls OLS and generates a valid Ansible playbook.
+Agent logs show OLS response with YAML playbook content in ~8-12s.
+Done
+8
+A Slack notification is sent for both flows.
+Verify messages in #ai-driven-network channel: "Resolved" for CrashLoop, "Playbook Generated" for Lightspeed.
+Done
+9
+An audit record is published to Kafka.
+Agent logs show "Audit record published" with incident_id and decision.
+Done
+10
+The end-to-end flow completes without manual intervention (after the initial trigger).
+Run both demo scenarios; no human steps required between trigger and notification.
+Done
+11
+A React dashboard visualizes the workflow and outcomes.
+Open the dashboard UI and observe StatusCards, IncidentTimeline, DemoTrigger, ChatPanel, SloPanel.
+Done
+12
+The entire stack deploys on a single OpenShift cluster via make helm-install.
+Clean deploy from scratch completes successfully.
+Done
+13
+CI pipeline passes with full integration tests.
+GitHub Actions PR checks pass: unit tests + E2E on Kind cluster.
+Done
+
+8. What Was Mocked/Skipped in the Demo
+Component
+Status in Demo
+Notes
+AAP
+Mock (aap-mock pod)
+FastAPI mock returning success for job launches. Real AAP integration planned for V2.
+ServiceNow
+Mock (servicenow-mock pod)
+FastAPI mock for ticket creation. PDI integration in progress.
+LLM Analysis (Lightspeed flow)
+Overridden
+confidence_override + failure_type_override bypass Granite to guarantee routing. CrashLoop flow uses real LLM.
+AAP Execution (Lightspeed flow)
+Skipped
+LIGHTSPEED_SKIP_AAP=true. Playbook is generated by OLS but not executed. lightspeed-runner template doesn't exist in AAP.
+Grafana Alerting
+Not wired
+Demo uses manual trigger buttons instead of Grafana → Kafka alert rules.
+MCP Investigate (get_pods, get_events)
+Not wired
+Agent uses raw log event directly; does not call mcp-openshift/mcp-lokistack for live evidence gathering.
+
+
