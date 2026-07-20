@@ -140,7 +140,9 @@ class ServiceNowIncidentTester(ServiceNowClient):
         payload = {
             "state": "6",
             "close_code": "Solved (Permanently)",
+            "resolution_code": "Solved (Permanently)",
             "close_notes": "Validation: resolved by servicenow-bootstrap",
+            "caller_id": "admin",
         }
 
         success, data, error = self._make_request("PATCH", f"table/incident/{self._created_sys_id}", payload)
