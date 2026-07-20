@@ -295,6 +295,7 @@ def resolve_incident(
         payload = {
             "state": "6",
             "close_code": resolution_code,
+            "resolution_code": resolution_code,
             "close_notes": resolution_notes,
             "resolved_by": "noc-agent",
         }
