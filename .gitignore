@@ -95,3 +95,7 @@ scripts/ci/test-local.sh
 .claude/
 
 dev-private/
+
+# Postman Desktop workspace scaffolding (auto-generated)
+.postman/
+postman/
