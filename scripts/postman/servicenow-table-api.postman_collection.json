@@ -1,0 +1,315 @@
+{
+  "info": {
+    "name": "ServiceNow Table API — AI Network Remediation",
+    "description": "Postman collection for testing the ServiceNow Table API against a real PDI instance.\n\nUsed during V2.1 development to validate incident CRUD operations that the MCP ServiceNow server performs on behalf of the AI agent.\n\n## Setup\n1. Import the companion environment file (`servicenow-pdi.postman_environment.json`)\n2. Fill in `snow_instance_url`, `snow_username`, `snow_password`\n3. Run \"Whoami\" first to verify auth, then \"Create Incident\" — it auto-sets `sys_id` and `ticket_number` for subsequent requests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      { "key": "username", "value": "{{snow_username}}", "type": "string" },
+      { "key": "password", "value": "{{snow_password}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "sys_id", "value": "", "type": "string" },
+    { "key": "ticket_number", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Verify authentication before running other requests.",
+      "item": [
+        {
+          "name": "Whoami",
+          "protocolProfileBehavior": { "disableCookies": true },
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{snow_instance_url}}/api/now/ui/user/current_user",
+              "host": ["{{snow_instance_url}}"],
+              "path": ["api", "now", "ui", "user", "current_user"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Authenticated', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    var body = pm.response.json();",
+                  "    var name = body.result ? body.result.user_display_name || body.result.user_name : 'unknown';",
+                  "    console.log('Authenticated as: ' + name);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Incidents",
+      "description": "Full incident lifecycle: create, read, update, resolve, list.",
+      "item": [
+        {
+          "name": "Create Incident",
+          "protocolProfileBehavior": { "disableCookies": true },
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{snow_instance_url}}/api/now/table/incident",
+              "host": ["{{snow_instance_url}}"],
+              "path": ["api", "now", "table", "incident"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"short_description\": \"[AI-NOC] Test incident — Postman validation\",\n  \"description\": \"Test incident created via Postman to validate ServiceNow Table API access for the AI-driven network remediation quickstart.\",\n  \"priority\": \"3\",\n  \"category\": \"Infrastructure\",\n  \"subcategory\": \"OpenShift\",\n  \"assignment_group\": \"NOC-Team\",\n  \"state\": \"1\",\n  \"urgency\": \"3\",\n  \"impact\": \"3\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var result = pm.response.json().result;",
+                  "    pm.collectionVariables.set('sys_id', result.sys_id);",
+                  "    pm.collectionVariables.set('ticket_number', result.number);",
+                  "    pm.test('Incident created', function () {",
+                  "        pm.expect(result.number).to.match(/^INC/);",
+                  "    });",
+                  "    console.log('Created: ' + result.number + ' (sys_id: ' + result.sys_id + ')');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Incident by Number",
+          "protocolProfileBehavior": { "disableCookies": true },
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{snow_instance_url}}/api/now/table/incident?sysparm_query=number={{ticket_number}}&sysparm_limit=1",
+              "host": ["{{snow_instance_url}}"],
+              "path": ["api", "now", "table", "incident"],
+              "query": [
+                { "key": "sysparm_query", "value": "number={{ticket_number}}" },
+                { "key": "sysparm_limit", "value": "1" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Incident found', function () {",
+                  "    var results = pm.response.json().result;",
+                  "    pm.expect(results).to.be.an('array').with.length.above(0);",
+                  "    pm.expect(results[0].number).to.eql(pm.collectionVariables.get('ticket_number'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Incident (Work Notes)",
+          "protocolProfileBehavior": { "disableCookies": true },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{snow_instance_url}}/api/now/table/incident/{{sys_id}}",
+              "host": ["{{snow_instance_url}}"],
+              "path": ["api", "now", "table", "incident", "{{sys_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"work_notes\": \"AI agent investigating — gathering evidence via MCP tool calls.\",\n  \"state\": \"2\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Incident updated', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    pm.expect(pm.response.json().result.state).to.eql('2');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resolve Incident",
+          "protocolProfileBehavior": { "disableCookies": true },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{snow_instance_url}}/api/now/table/incident/{{sys_id}}",
+              "host": ["{{snow_instance_url}}"],
+              "path": ["api", "now", "table", "incident", "{{sys_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": \"6\",\n  \"close_code\": \"Solved (Permanently)\",\n  \"close_notes\": \"Resolved by AI-driven remediation agent — pod restarted successfully via AAP.\",\n  \"resolved_by\": \"noc_agent\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Incident resolved', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    pm.expect(pm.response.json().result.state).to.eql('6');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Incidents",
+          "protocolProfileBehavior": { "disableCookies": true },
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{snow_instance_url}}/api/now/table/incident?sysparm_limit=10&sysparm_fields=number,short_description,state,priority,sys_created_on&sysparm_display_value=true",
+              "host": ["{{snow_instance_url}}"],
+              "path": ["api", "now", "table", "incident"],
+              "query": [
+                { "key": "sysparm_limit", "value": "10" },
+                { "key": "sysparm_fields", "value": "number,short_description,state,priority,sys_created_on" },
+                { "key": "sysparm_display_value", "value": "true" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Incidents listed', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    pm.expect(pm.response.json().result).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Users & Groups",
+      "description": "User lookup and assignment group verification.",
+      "item": [
+        {
+          "name": "Lookup NOC Agent User",
+          "protocolProfileBehavior": { "disableCookies": true },
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{snow_instance_url}}/api/now/table/sys_user?sysparm_query=name=NOC Agent&sysparm_limit=1&sysparm_fields=sys_id,name,user_name,active",
+              "host": ["{{snow_instance_url}}"],
+              "path": ["api", "now", "table", "sys_user"],
+              "query": [
+                { "key": "sysparm_query", "value": "name=NOC Agent" },
+                { "key": "sysparm_limit", "value": "1" },
+                { "key": "sysparm_fields", "value": "sys_id,name,user_name,active" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('NOC Agent user found', function () {",
+                  "    var results = pm.response.json().result;",
+                  "    pm.expect(results).to.be.an('array').with.length.above(0);",
+                  "    pm.expect(results[0].name).to.eql('NOC Agent');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lookup NOC-Team Group",
+          "protocolProfileBehavior": { "disableCookies": true },
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{snow_instance_url}}/api/now/table/sys_user_group?sysparm_query=name=NOC-Team&sysparm_limit=1&sysparm_fields=sys_id,name,active",
+              "host": ["{{snow_instance_url}}"],
+              "path": ["api", "now", "table", "sys_user_group"],
+              "query": [
+                { "key": "sysparm_query", "value": "name=NOC-Team" },
+                { "key": "sysparm_limit", "value": "1" },
+                { "key": "sysparm_fields", "value": "sys_id,name,active" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('NOC-Team group found', function () {",
+                  "    var results = pm.response.json().result;",
+                  "    pm.expect(results).to.be.an('array').with.length.above(0);",
+                  "    pm.expect(results[0].name).to.eql('NOC-Team');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
