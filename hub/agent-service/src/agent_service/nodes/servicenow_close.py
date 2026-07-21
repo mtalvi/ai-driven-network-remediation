@@ -46,9 +46,12 @@ def _build_resolution_description(state) -> str:
 
 async def servicenow_close_node(state) -> dict:
     """Create a pre-resolved ServiceNow incident for successful remediations."""
+
+    # Escalations already have a ticket from the escalate node
     if state.decision == "escalate":
         return {}
 
+    # Only create a resolved ticket if remediation actually succeeded
     result = state.remediation_result
     if not result or not result.success:
         return {}
@@ -58,6 +61,7 @@ async def servicenow_close_node(state) -> dict:
     if not rca or not log_event:
         return {}
 
+    # Build the incident payload from RCA and log event context
     short_description = (
         f"[AI-NOC][Resolved] {rca.failure_type} – {log_event.pod_name}"
         f" in {log_event.namespace} ({log_event.edge_site_id})"
@@ -65,6 +69,7 @@ async def servicenow_close_node(state) -> dict:
     priority = _PRIORITY_MAP.get(rca.estimated_severity, 4)
     description = _build_resolution_description(state)
 
+    # Step 1: Create the incident via MCP tool
     logger.info(f"Creating resolved ServiceNow incident: {short_description}")
     try:
         create_resp = await _invoke_tool(
@@ -87,6 +92,7 @@ async def servicenow_close_node(state) -> dict:
     if not ticket:
         return {}
 
+    # Step 2: Immediately resolve the incident with remediation details
     resolution_notes = (
         f"Auto-remediated: {result.action_taken} via {result.tool_used} "
         f"(job {result.job_id}, {result.duration_seconds:.1f}s). "

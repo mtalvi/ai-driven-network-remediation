@@ -5,6 +5,8 @@ from helpers import make_rca, make_state
 from agent_service.models import RemediationResult
 from agent_service.nodes.servicenow_close import servicenow_close_node
 
+STUB_TICKET = "INC0050001"
+
 
 def _stub_remediation(**overrides):
     defaults = dict(
@@ -20,7 +22,7 @@ def _stub_remediation(**overrides):
     return RemediationResult(**defaults)
 
 
-def _make_capture_invoke(ticket="INC0050001"):
+def _make_capture_invoke(ticket=STUB_TICKET):
     calls = []
 
     async def _capture(tool_name, kwargs):
@@ -51,7 +53,7 @@ class TestServicenowCloseHappyPath:
         with patch("agent_service.nodes.servicenow_close._invoke_tool", fake_invoke):
             result = await servicenow_close_node(state)
 
-        assert result["servicenow_ticket"] == "INC0050001"
+        assert result["servicenow_ticket"] == STUB_TICKET
         assert len(calls) == 2
         assert calls[0]["tool_name"] == "create_incident"
         assert calls[1]["tool_name"] == "resolve_incident"
@@ -84,7 +86,7 @@ class TestServicenowCloseHappyPath:
             await servicenow_close_node(state)
 
         resolve_kwargs = calls[1]["kwargs"]
-        assert resolve_kwargs["ticket_number"] == "INC0050001"
+        assert resolve_kwargs["ticket_number"] == STUB_TICKET
         assert "restart-nginx" in resolve_kwargs["resolution_notes"]
         assert "Container killed by OOM" in resolve_kwargs["resolution_notes"]
 
@@ -185,7 +187,7 @@ class TestServicenowCloseLightspeed:
         with patch("agent_service.nodes.servicenow_close._invoke_tool", fake_invoke):
             result = await servicenow_close_node(state)
 
-        assert result["servicenow_ticket"] == "INC0050001"
+        assert result["servicenow_ticket"] == STUB_TICKET
         assert len(calls) == 2
 
 
@@ -237,11 +239,11 @@ class TestServicenowCloseErrorHandling:
         async def _create_ok_resolve_fail(tool_name, kwargs):
             call_count["n"] += 1
             if tool_name == "create_incident":
-                return {"success": True, "ticket_number": "INC0050001", "sys_id": "x"}
+                return {"success": True, "ticket_number": STUB_TICKET, "sys_id": "x"}
             raise ConnectionError("resolve failed")
 
         with patch("agent_service.nodes.servicenow_close._invoke_tool", _create_ok_resolve_fail):
             result = await servicenow_close_node(state)
 
-        assert result["servicenow_ticket"] == "INC0050001"
+        assert result["servicenow_ticket"] == STUB_TICKET
         assert call_count["n"] == 2
