@@ -3,6 +3,7 @@ from loguru import logger
 from agent_service.utils import invoke_tool as _invoke_tool
 
 _PRIORITY_MAP = {"critical": 1, "high": 2, "medium": 3, "low": 4}
+_DEFAULT_PRIORITY = 4
 
 
 def _build_description(log_event, rca, failed_attempts) -> str:
@@ -48,7 +49,7 @@ async def escalate_node(state) -> dict:
     )
 
     description = _build_description(log_event, rca, state.failed_attempts)
-    priority = _PRIORITY_MAP.get(rca.estimated_severity, 4)
+    priority = _PRIORITY_MAP.get(rca.estimated_severity, _DEFAULT_PRIORITY)
 
     logger.info(f"Creating ServiceNow incident: {short_description}")
     try:

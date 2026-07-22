@@ -13,6 +13,7 @@ from loguru import logger
 from agent_service.utils import invoke_tool as _invoke_tool
 
 _PRIORITY_MAP = {"critical": 1, "high": 2, "medium": 3, "low": 4}
+_DEFAULT_PRIORITY = 4
 
 
 def _build_resolution_description(state) -> str:
@@ -66,7 +67,7 @@ async def servicenow_close_node(state) -> dict:
         f"[AI-NOC][Resolved] {rca.failure_type} – {log_event.pod_name}"
         f" in {log_event.namespace} ({log_event.edge_site_id})"
     )
-    priority = _PRIORITY_MAP.get(rca.estimated_severity, 4)
+    priority = _PRIORITY_MAP.get(rca.estimated_severity, _DEFAULT_PRIORITY)
     description = _build_resolution_description(state)
 
     # Step 1: Create the incident via MCP tool
