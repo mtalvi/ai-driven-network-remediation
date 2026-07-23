@@ -349,6 +349,7 @@ agentService:
     existingSecret: ""
     channel: "#ai-driven-network"
   servicenowInstanceUrl: ""
+  servicenowCreateResolved: "false"
   env:
     kafkaBootstrap: "kafka:9092"
     kafkaGroupId: "dark-noc-agent"

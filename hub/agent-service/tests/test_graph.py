@@ -5,7 +5,7 @@ import pytest
 from click.testing import CliRunner
 
 from agent_service import main
-from agent_service.graph import _route_after_act, build_graph
+from agent_service.graph import _route_after_act, _route_after_lightspeed, build_graph
 from agent_service.models import (
     GraphConfig,
     IncidentState,
@@ -131,6 +131,7 @@ def _patch_graph_nodes():
         patch("agent_service.nodes.lightspeed.LIGHTSPEED_URL", "http://als-stub"),
         patch("agent_service.nodes.lightspeed._call_als", _als_mock),
         patch("agent_service.nodes.lightspeed._invoke_tool", _mock_invoke_tool()),
+        patch("agent_service.nodes.servicenow_close._invoke_tool", _mock_escalate_invoke),
         patch("agent_service.nodes.audit.KafkaProducer"),
     ):
         yield
@@ -261,6 +262,21 @@ class TestConditionalRouting:
         assert result["decision"] == "escalate"
         assert result.get("remediation_result") is None
 
+    async def test_lightspeed_failure_escalates(self, _patch_graph_nodes):
+        als_fail = AsyncMock(side_effect=ConnectionError("ALS unreachable"))
+        with patch("agent_service.nodes.lightspeed._call_als", als_fail):
+            graph = build_graph()
+            result = await graph.ainvoke(
+                {
+                    "raw_event": "test event",
+                    "failure_type_override": "KafkaLag",
+                }
+            )
+
+        assert result["decision"] == "lightspeed"
+        assert result["remediation_result"].success is False
+        assert result["servicenow_ticket"] == "INC0000001"
+
     async def test_custom_thresholds_alter_routing(self, _patch_graph_nodes):
         config = GraphConfig(remediate_threshold=0.9, escalate_threshold=0.8)
         graph = build_graph(config)
@@ -308,6 +324,38 @@ class TestCli:
 
         assert result.exit_code == 0
         assert "next_action: lightspeed" in result.output
+
+
+class TestRouteAfterLightspeed:
+    def test_success_routes_to_servicenow_close(self):
+        result = RemediationResult(
+            action_taken="generate-playbook",
+            tool_used="lightspeed",
+            success=True,
+            job_id="conv-1",
+            duration_seconds=2.0,
+            output_summary="Generated playbook",
+            timestamp="2024-01-01T00:00:00Z",
+        )
+        state = IncidentState(raw_event="test", remediation_result=result)
+        assert _route_after_lightspeed(state) == "servicenow_close"
+
+    def test_failure_routes_to_escalate(self):
+        result = RemediationResult(
+            action_taken="generate-playbook",
+            tool_used="lightspeed",
+            success=False,
+            job_id="",
+            duration_seconds=1.0,
+            output_summary="Lightspeed failed",
+            timestamp="2024-01-01T00:00:00Z",
+        )
+        state = IncidentState(raw_event="test", remediation_result=result)
+        assert _route_after_lightspeed(state) == "escalate"
+
+    def test_no_result_routes_to_escalate(self):
+        state = IncidentState(raw_event="test", remediation_result=None)
+        assert _route_after_lightspeed(state) == "escalate"
 
 
 class TestRouteAfterAct:

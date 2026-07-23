@@ -1,11 +1,19 @@
 from unittest.mock import patch
 
+import pytest
 from helpers import make_rca, make_state
 
 from agent_service.models import RemediationResult
 from agent_service.nodes.servicenow_close import servicenow_close_node
 
 STUB_TICKET = "INC0050001"
+
+
+@pytest.fixture(autouse=True)
+def _enable_create_resolved():
+    """Enable resolved-ticket creation for all tests; individual tests override as needed."""
+    with patch("agent_service.nodes.servicenow_close.SERVICENOW_CREATE_RESOLVED", True):
+        yield
 
 
 def _stub_remediation(**overrides):
@@ -110,19 +118,15 @@ class TestServicenowCloseHappyPath:
 
 
 class TestServicenowCloseNoOp:
-    async def test_escalate_decision_is_noop(self):
+    async def test_escalate_decision_raises(self):
         state = make_state(
             root_cause_analysis=make_rca(),
             decision="escalate",
             servicenow_ticket="INC0099999",
         )
-        calls, fake_invoke = _make_capture_invoke()
 
-        with patch("agent_service.nodes.servicenow_close._invoke_tool", fake_invoke):
-            result = await servicenow_close_node(state)
-
-        assert result == {}
-        assert len(calls) == 0
+        with pytest.raises(RuntimeError, match="graph wiring error"):
+            await servicenow_close_node(state)
 
     async def test_failed_remediation_is_noop(self):
         state = make_state(
@@ -247,3 +251,54 @@ class TestServicenowCloseErrorHandling:
 
         assert result["servicenow_ticket"] == STUB_TICKET
         assert call_count["n"] == 2
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Config flag: SERVICENOW_CREATE_RESOLVED=false skips ticket creation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestServicenowCloseDisabled:
+    @pytest.fixture(autouse=True)
+    def _disable_create_resolved(self):
+        with patch("agent_service.nodes.servicenow_close.SERVICENOW_CREATE_RESOLVED", False):
+            yield
+
+    async def test_successful_remediation_skipped_when_disabled(self):
+        state = make_state(
+            root_cause_analysis=make_rca(),
+            decision="remediate",
+            remediation_result=_stub_remediation(),
+        )
+        calls, fake_invoke = _make_capture_invoke()
+
+        with patch("agent_service.nodes.servicenow_close._invoke_tool", fake_invoke):
+            result = await servicenow_close_node(state)
+
+        assert result == {}
+        assert len(calls) == 0
+
+    async def test_lightspeed_success_skipped_when_disabled(self):
+        state = make_state(
+            root_cause_analysis=make_rca(),
+            decision="lightspeed",
+            remediation_result=_stub_remediation(),
+        )
+        calls, fake_invoke = _make_capture_invoke()
+
+        with patch("agent_service.nodes.servicenow_close._invoke_tool", fake_invoke):
+            result = await servicenow_close_node(state)
+
+        assert result == {}
+        assert len(calls) == 0
+
+    async def test_escalate_still_raises_when_disabled(self):
+        """The escalate guard fires regardless of the config flag."""
+        state = make_state(
+            root_cause_analysis=make_rca(),
+            decision="escalate",
+            servicenow_ticket="INC0099999",
+        )
+
+        with pytest.raises(RuntimeError, match="graph wiring error"):
+            await servicenow_close_node(state)

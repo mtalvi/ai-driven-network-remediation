@@ -78,6 +78,8 @@ spec:
             - name: SERVICENOW_INSTANCE_URL
               value: {{ .Values.agentService.servicenowInstanceUrl | quote }}
             {{- end }}
+            - name: SERVICENOW_CREATE_RESOLVED
+              value: {{ .Values.agentService.servicenowCreateResolved | quote }}
           ports:
             - name: http
               containerPort: 8001

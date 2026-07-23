@@ -1,15 +1,18 @@
 """ServiceNow incident lifecycle: create-and-resolve after successful remediation.
 
-When remediation or lightspeed succeeds, this node creates an informational
-ServiceNow incident in resolved state so every automated action has a
-corresponding audit trail in ITSM — not just escalations.
+When ``SERVICENOW_CREATE_RESOLVED`` is enabled and remediation or lightspeed
+succeeds, this node creates an informational ServiceNow incident in resolved
+state so every automated action has a corresponding audit trail in ITSM.
+When the flag is disabled (the default), this node is a no-op.
 
-When the decision was ``escalate``, the escalate node already created the
-ticket; this node is a no-op.
+The graph topology must never route escalations here — the escalate node
+owns that ticket.  If this node is reached with decision == "escalate",
+it raises ``RuntimeError`` so the mis-wiring is caught immediately.
 """
 
 from loguru import logger
 
+from agent_service.config import SERVICENOW_CREATE_RESOLVED
 from agent_service.utils import invoke_tool as _invoke_tool
 
 _PRIORITY_MAP = {"critical": 1, "high": 2, "medium": 3, "low": 4}
@@ -48,8 +51,14 @@ def _build_resolution_description(state) -> str:
 async def servicenow_close_node(state) -> dict:
     """Create a pre-resolved ServiceNow incident for successful remediations."""
 
-    # Escalations already have a ticket from the escalate node
     if state.decision == "escalate":
+        raise RuntimeError(
+            "servicenow_close_node reached with decision='escalate'; "
+            "graph wiring error — escalations must route directly to notify"
+        )
+
+    if not SERVICENOW_CREATE_RESOLVED:
+        logger.debug("SERVICENOW_CREATE_RESOLVED is disabled, skipping resolved ticket creation")
         return {}
 
     # Only create a resolved ticket if remediation actually succeeded

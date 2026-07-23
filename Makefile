@@ -38,6 +38,7 @@ ENABLE_SLACK           ?= false
 SLACK_BOT_TOKEN        ?=
 SLACK_CHANNEL          ?= \#ai-driven-network
 SERVICENOW_INSTANCE_URL ?=
+SERVICENOW_CREATE_RESOLVED ?= false
 
 # ── Langfuse (optional: ENABLE_LANGFUSE=true) ───────────────────
 ENABLE_LANGFUSE        ?=
@@ -148,7 +149,8 @@ helm_slack_args = \
 	--set agentService.slack.enabled=$(ENABLE_SLACK) \
 	$(if $(SLACK_BOT_TOKEN),--set-string agentService.slack.botToken='$(SLACK_BOT_TOKEN)',) \
 	$(if $(filter true,$(ENABLE_SLACK)),--set-string agentService.slack.channel='$(SLACK_CHANNEL)',) \
-	$(if $(SERVICENOW_INSTANCE_URL),--set-string agentService.servicenowInstanceUrl='$(SERVICENOW_INSTANCE_URL)',)
+	$(if $(SERVICENOW_INSTANCE_URL),--set-string agentService.servicenowInstanceUrl='$(SERVICENOW_INSTANCE_URL)',) \
+	--set-string agentService.servicenowCreateResolved='$(SERVICENOW_CREATE_RESOLVED)'
 
 helm_infra_args = \
 	--set kafka.enabled=$(ENABLE_KAFKA) \

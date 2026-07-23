@@ -79,6 +79,7 @@ SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
 SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "#ai-driven-network")
 SLACK_TIMEOUT_SECONDS = int(os.getenv("SLACK_TIMEOUT_SECONDS", "10"))
 SERVICENOW_INSTANCE_URL = os.getenv("SERVICENOW_INSTANCE_URL", "")
+SERVICENOW_CREATE_RESOLVED = _env_bool("SERVICENOW_CREATE_RESOLVED", False)
 
 _http_client: httpx.AsyncClient | None = None
 
