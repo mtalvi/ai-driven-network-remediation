@@ -11,6 +11,7 @@ ROUTES_ENABLED  ?= true
 CHATBOT_IMG        := $(REGISTRY)/noc-chatbot-service:$(VERSION)
 INGESTION_IMG      := $(REGISTRY)/noc-ingestion-pipeline:$(VERSION)
 AGENT_IMG          := $(REGISTRY)/noc-agent-service:$(VERSION)
+RAN_ANOMALY_IMG    := $(REGISTRY)/noc-ran-anomaly-detector:$(VERSION)
 FRONTEND_IMG       := $(REGISTRY)/noc-frontend:$(VERSION)
 MCP_OPENSHIFT_IMG  := $(REGISTRY)/noc-mcp-openshift:$(VERSION)
 MCP_LOKISTACK_IMG  := $(REGISTRY)/noc-mcp-lokistack:$(VERSION)
@@ -21,6 +22,11 @@ MCP_SERVICENOW_IMG := $(REGISTRY)/noc-mcp-servicenow:$(VERSION)
 MCP_CONTAINERFILE           := hub/mcp-servers/Containerfile
 MCP_OPENSHIFT_CONTAINERFILE := hub/mcp-servers/Containerfile.openshift
 MCP_CONTEXT                 := hub/mcp-servers
+
+# ran-anomaly-detector depends on the sibling telco-oran package via a local
+# uv path source, so its build context must be `hub/`, not its own directory.
+RAN_ANOMALY_CONTAINERFILE   := hub/ran-anomaly-detector/Containerfile
+RAN_ANOMALY_CONTEXT         := hub
 
 # ── Feature flags ─────────────────────────────────────────────────
 ENABLE_HUB             ?= true
@@ -91,6 +97,7 @@ CORE_BUILD_PUSH_IMAGES := \
 	$(CHATBOT_IMG) \
 	$(INGESTION_IMG) \
 	$(AGENT_IMG) \
+	$(RAN_ANOMALY_IMG) \
 	$(FRONTEND_IMG) \
 	$(MCP_OPENSHIFT_IMG) \
 	$(MCP_LOKISTACK_IMG) \
@@ -227,6 +234,7 @@ helm_all_args = \
 	--set image.chatbotService=noc-chatbot-service \
 	--set image.ingestionPipeline=noc-ingestion-pipeline \
 	--set image.agentService=noc-agent-service \
+	--set image.ranAnomalyDetector=noc-ran-anomaly-detector \
 	--set image.frontend=noc-frontend \
 	--set image.tag=$(VERSION) \
 	--set global.routes.enabled=$(ROUTES_ENABLED) \
@@ -343,7 +351,7 @@ edge-rbac-teardown:
 # ══════════════════════════════════════════════════════════════════════
 
 .PHONY: build-all-images
-build-all-images: build-chatbot-image build-agent-image build-frontend-image build-mcp-images
+build-all-images: build-chatbot-image build-agent-image build-ran-anomaly-image build-frontend-image build-mcp-images
 
 .PHONY: build-chatbot-image
 build-chatbot-image:
@@ -353,6 +361,10 @@ build-chatbot-image:
 .PHONY: build-agent-image
 build-agent-image:
 	$(CONTAINER_TOOL) build -t $(AGENT_IMG) --platform=$(ARCH) -f hub/agent-service/Containerfile hub/agent-service
+
+.PHONY: build-ran-anomaly-image
+build-ran-anomaly-image:
+	$(CONTAINER_TOOL) build -t $(RAN_ANOMALY_IMG) --platform=$(ARCH) -f $(RAN_ANOMALY_CONTAINERFILE) $(RAN_ANOMALY_CONTEXT)
 
 .PHONY: build-frontend-image
 build-frontend-image:
@@ -496,6 +508,7 @@ unit-tests:
 	cd hub/mcp-servers/mcp-servicenow && uv sync --group dev && uv run pytest
 	cd hub/infra/servicenow-mock && uv sync --group dev && uv run pytest
 	cd hub/telco-oran && uv sync --group dev && uv run pytest
+	cd hub/ran-anomaly-detector && uv sync --group dev && uv run pytest
 
 .PHONY: integration-tests
 integration-tests:
