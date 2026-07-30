@@ -1,0 +1,51 @@
+[project]
+name = "ran-anomaly-detector"
+version = "0.1.0"
+description = "Rule-based RAN KPI anomaly detection workflow consuming Kafka metrics via the telco-oran domain model"
+readme = "README.md"
+authors = [
+    { name = "rh-ai-quickstart" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "telco-oran",
+    "click>=8.1.0",
+    "fastapi>=0.115",
+    "kafka-python-ng>=2.2",
+    "loguru>=0.7.0",
+    "pydantic>=2.0.0",
+    "uvicorn>=0.34",
+]
+
+[tool.uv.sources]
+telco-oran = { path = "../telco-oran" }
+
+[project.scripts]
+ran-anomaly-detector = "ran_anomaly_detector:main"
+ran-anomaly-detector-server = "ran_anomaly_detector.server:start"
+
+[build-system]
+requires = ["uv_build>=0.9.13,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+asyncio_mode = "auto"
+addopts = "--cov --cov-report=term-missing"
+
+[dependency-groups]
+dev = [
+    "httpx2>=0.1",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=6.0",
+]
+
+[tool.coverage.run]
+source = ["ran_anomaly_detector"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_empty = true
