@@ -30,6 +30,7 @@ kafka:
     - { name: remediation-jobs, partitions: 1, retention: 86400000 }
     - { name: agent-events, partitions: 1, retention: 86400000 }
     - { name: incident-audit, partitions: 1, retention: 7776000000 }
+    - { name: ran-combined-metrics, partitions: 3, retention: 604800000 }
   externalPort: 9094
   tls:
     enabled: true
