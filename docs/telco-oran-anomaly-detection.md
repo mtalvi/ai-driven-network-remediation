@@ -231,8 +231,13 @@ issues and are intentionally not part of this:
 |---|---|
 | **Vendor documentation RAG ingestion** (separate task) | Index vendor manuals (e.g. gNodeB documentation) into a vector store so recommended fixes can cite real documentation sections. |
 | **LLM-based root cause + recommended fix** | For each anomaly this workflow detects, ask an LLM to explain *why* it likely happened and retrieve a specific recommended fix from the ingested docs — layered **on top of**, not replacing, the rule-based detection above. |
-| **Persistence** | Anomalies are currently only logged and kept in a small in-memory buffer (`/anomalies`) — nothing is written to a database or object storage yet. |
 | **Actual remediation** | Unlike Workflow 1, nothing here executes a real-world fix (e.g. adjusting antenna tilt) — it only reports. |
+
+**Note on persistence:** anomalies are only logged and kept in a small in-memory buffer
+(`/anomalies`) — nothing is written to a database or object storage. Unlike the items above, this
+is not deferred work: the original proposal's "results are persisted (database / S3)" acceptance
+criterion was confirmed by the team to be a documentation error, not an actual requirement. The
+in-memory approach is intentional and sufficient for this workflow as designed.
 
 ---
 

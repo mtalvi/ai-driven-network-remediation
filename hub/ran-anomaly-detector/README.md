@@ -21,8 +21,10 @@ For each detected anomaly, one JSON record is produced:
 }
 ```
 
-This first pass only logs/exposes anomalies (via `/anomalies`); persistence and LLM-based root
-cause analysis / RAG-based recommended fixes are follow-up work.
+This service only logs/exposes anomalies (via `/anomalies`), kept in a bounded in-memory buffer —
+no database or object storage is used, confirmed as sufficient by design. LLM-based root cause
+analysis and RAG-based recommended fixes are separate, planned follow-up work (extending this
+output with `root_cause`/`recommended_fix` fields).
 
 ## Usage
 
