@@ -22,13 +22,13 @@ from ran_anomaly_detector.config import (
 from ran_anomaly_detector.detection import AnomalyDetectionService
 from ran_anomaly_detector.kafka.consumer import MetricsConsumer
 
-AnomalyBuffer = "deque[dict[str, Any]]"
+AnomalyBuffer = deque[dict[str, Any]]
 
 
 def _handle_metrics_message(
     raw_value: bytes,
     service: AnomalyDetectionService,
-    recent_anomalies: "deque[dict[str, Any]]",
+    recent_anomalies: AnomalyBuffer,
 ) -> None:
     anomalies = service.process_message(raw_value)
     for anomaly in anomalies:
@@ -39,7 +39,7 @@ def _handle_metrics_message(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     detection_service = AnomalyDetectionService(history_size=HISTORY_WINDOW_SIZE)
-    recent_anomalies: "deque[dict[str, Any]]" = deque(maxlen=RECENT_ANOMALIES_LIMIT)
+    recent_anomalies: AnomalyBuffer = deque(maxlen=RECENT_ANOMALIES_LIMIT)
 
     app.state.detection_service = detection_service
     app.state.recent_anomalies = recent_anomalies
@@ -90,7 +90,7 @@ def ready(req: Request):
 @app.get("/anomalies")
 def anomalies(req: Request, limit: int = 50):
     """Return the most recently detected anomalies (in-memory only, not persisted)."""
-    recent: "deque[dict[str, Any]]" = req.app.state.recent_anomalies
+    recent: AnomalyBuffer = req.app.state.recent_anomalies
     items = list(recent)[-limit:]
     return {"count": len(items), "anomalies": items}
 

@@ -68,6 +68,29 @@ class MetricsConsumer:
             self._consumer = None
 
     def _run(self) -> None:
+        """Connect, poll, and transparently reconnect if the poll loop ever fails.
+
+        A dead broker connection, expired auth, or a deleted topic can make
+        `poll()` raise *after* a successful connect. Without catching that here,
+        the thread would exit for good and the service would silently stop
+        processing messages (while still reporting healthy) until restarted.
+        """
+        while self._running:
+            if not self._connect():
+                return
+            try:
+                self._poll_loop()
+            except Exception:
+                logger.exception(
+                    "Kafka RAN metrics poll loop failed, reconnecting to {} in 5s",
+                    self._bootstrap_servers,
+                )
+                self._stop_event.wait(5)
+            finally:
+                self.close()
+
+    def _connect(self) -> bool:
+        """Retry connecting to Kafka every 5s until successful or stop() is called."""
         while self._running:
             try:
                 self._consumer = KafkaConsumer(
@@ -78,33 +101,34 @@ class MetricsConsumer:
                     enable_auto_commit=True,
                     max_poll_records=10,
                 )
-                break
+                return True
             except Exception:
                 logger.warning("Kafka not reachable at {}, retrying in 5s", self._bootstrap_servers)
                 self._stop_event.wait(5)
+        return False
 
-        if not self._running:
-            return
+    def _poll_loop(self) -> None:
+        """Continuously poll for new records and dispatch each batch until stop() is called."""
+        while self._running:
+            records = self._consumer.poll(timeout_ms=self._poll_timeout_ms)
+            if not records:
+                continue
+            self._dispatch(records)
 
-        try:
-            while self._running:
-                records = self._consumer.poll(timeout_ms=self._poll_timeout_ms)
-                if not records:
-                    continue
-                for messages in records.values():
-                    for msg in messages:
-                        if not self._running:
-                            return
-                        try:
-                            self._handle_message(msg)
-                        except Exception:
-                            logger.exception(
-                                "Failed to handle RAN metrics message topic={} offset={}",
-                                msg.topic,
-                                msg.offset,
-                            )
-        finally:
-            self.close()
+    def _dispatch(self, records: Any) -> None:
+        """Hand each message in a polled batch to the handler, isolating per-message failures."""
+        for messages in records.values():
+            for msg in messages:
+                if not self._running:
+                    return
+                try:
+                    self._handle_message(msg)
+                except Exception:
+                    logger.exception(
+                        "Failed to handle RAN metrics message topic={} offset={}",
+                        msg.topic,
+                        msg.offset,
+                    )
 
     def _handle_message(self, msg: Any) -> None:
         logger.info(
