@@ -245,7 +245,10 @@ async def chat(req: ChatRequest) -> dict:
 
     mcp_items = get_mcp_items(integrations_data)
 
-    llm_ok = model_source not in ("unreachable", "disabled")
+    # Anything other than a genuine live reply (unreachable, disabled, empty, or an
+    # http-<code> error) means the operator got a deterministic fallback, not a real
+    # model answer, so it should be surfaced as degraded rather than "ok".
+    llm_ok = model_source == "live"
     _deps = build_deps({"llm": llm_ok})
 
     return {

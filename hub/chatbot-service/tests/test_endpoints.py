@@ -177,6 +177,32 @@ def test_chat_model_unavailable(mock_model, mock_snow, mock_integrations, client
     assert data["model"]["source"] == "unreachable"
 
 
+@patch("chatbot_service.get_integrations", new_callable=AsyncMock)
+@patch("chatbot_service.fetch_servicenow_incident_count", new_callable=AsyncMock)
+@patch("chatbot_service.call_model", new_callable=AsyncMock)
+def test_chat_model_http_error_reported_as_degraded(mock_model, mock_snow, mock_integrations, client):
+    """Regression test: an HTTP error from the LLM (e.g. a 404 for an unregistered
+    model) must be reported as degraded, not silently treated as healthy."""
+    mock_snow.return_value = (0, {"reachable": True})
+    mock_integrations.return_value = {
+        "_deps": {"status": "ok"},
+        "total": 7,
+        "up": 7,
+        "down": 0,
+        "integrations": [],
+        "slo": {},
+        "incident_movie": [],
+        "business_impact": {},
+    }
+    mock_model.return_value = ("", "http-404")
+
+    resp = client.post("/api/chat", json={"message": "Status?"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["_deps"] == {"status": "degraded", "unavailable": ["llm"]}
+    assert data["model"]["source"] == "http-404"
+
+
 def test_chat_empty_message(client):
     resp = client.post("/api/chat", json={"message": "  "})
     assert resp.status_code == 200
