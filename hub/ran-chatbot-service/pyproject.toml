@@ -1,0 +1,33 @@
+[project]
+name = "ran-chatbot-service"
+version = "0.1.0"
+description = "Telco O-RAN chatbot entrypoint: thin FastAPI BFF exposing /api/chat over detected RAN anomalies and their root cause analysis"
+readme = "README.md"
+authors = [
+    { name = "rh-ai-quickstart" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    "httpx>=0.28",
+    "kafka-python-ng>=2.2",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=0.1",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "respx>=0.22",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.scripts]
+ran-chatbot-service = "ran_chatbot_service:main"
+
+[build-system]
+requires = ["uv_build>=0.9.13,<0.10.0"]
+build-backend = "uv_build"
