@@ -30,6 +30,16 @@ def _format_recent_incidents(integrations_data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _format_pct(value: float | None) -> str:
+    """Format a percentage value, tolerating None (e.g. no incidents in the lookback window).
+
+    Note: `dict.get(key, default)` only applies `default` when `key` is *absent* — SLO fields
+    like `auto_remediation_pct` are always present but explicitly `None` when there's no data
+    (see compute_slo_metrics), so callers must not rely on `.get(key, 0)` alone here.
+    """
+    return f"{value:.0f}%" if value is not None else "n/a"
+
+
 def _format_slo_context(integrations_data: dict[str, Any]) -> str:
     """Extract SLO and business impact metrics for LLM context."""
     slo = integrations_data.get("slo", {})
@@ -43,12 +53,15 @@ def _format_slo_context(integrations_data: dict[str, Any]) -> str:
     else:
         conf_str = "n/a"
 
+    mttr = slo.get("mttr_seconds")
+    mttr_str = f"{mttr}s" if mttr is not None else "n/a"
+
     return (
-        f"  - Auto-remediation rate: {slo.get('auto_remediation_pct', 0):.0f}%\n"
+        f"  - Auto-remediation rate: {_format_pct(slo.get('auto_remediation_pct'))}\n"
         f"  - AI model confidence: {conf_str}\n"
-        f"  - MTTR: {slo.get('mttr_seconds', 'n/a')}s\n"
+        f"  - MTTR: {mttr_str}\n"
         f"  - Incidents processed: {bi.get('incidents_processed', 0)}\n"
-        f"  - Remediation success: {bi.get('remediation_success_pct', 0):.0f}%"
+        f"  - Remediation success: {_format_pct(bi.get('remediation_success_pct'))}"
     )
 
 
