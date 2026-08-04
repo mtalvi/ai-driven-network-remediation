@@ -13,6 +13,7 @@ INGESTION_IMG      := $(REGISTRY)/noc-ingestion-pipeline:$(VERSION)
 AGENT_IMG          := $(REGISTRY)/noc-agent-service:$(VERSION)
 RAN_ANOMALY_IMG    := $(REGISTRY)/noc-ran-anomaly-detector:$(VERSION)
 RAN_RCA_IMG        := $(REGISTRY)/noc-ran-rca-service:$(VERSION)
+RAN_CHATBOT_IMG    := $(REGISTRY)/noc-ran-chatbot-service:$(VERSION)
 FRONTEND_IMG       := $(REGISTRY)/noc-frontend:$(VERSION)
 MCP_OPENSHIFT_IMG  := $(REGISTRY)/noc-mcp-openshift:$(VERSION)
 MCP_LOKISTACK_IMG  := $(REGISTRY)/noc-mcp-lokistack:$(VERSION)
@@ -104,6 +105,7 @@ CORE_BUILD_PUSH_IMAGES := \
 	$(AGENT_IMG) \
 	$(RAN_ANOMALY_IMG) \
 	$(RAN_RCA_IMG) \
+	$(RAN_CHATBOT_IMG) \
 	$(FRONTEND_IMG) \
 	$(MCP_OPENSHIFT_IMG) \
 	$(MCP_LOKISTACK_IMG) \
@@ -242,6 +244,7 @@ helm_all_args = \
 	--set image.agentService=noc-agent-service \
 	--set image.ranAnomalyDetector=noc-ran-anomaly-detector \
 	--set image.ranRcaService=noc-ran-rca-service \
+	--set image.ranChatbotService=noc-ran-chatbot-service \
 	--set image.frontend=noc-frontend \
 	--set image.tag=$(VERSION) \
 	--set global.routes.enabled=$(ROUTES_ENABLED) \
@@ -359,7 +362,7 @@ edge-rbac-teardown:
 # ══════════════════════════════════════════════════════════════════════
 
 .PHONY: build-all-images
-build-all-images: build-chatbot-image build-agent-image build-ran-anomaly-image build-ran-rca-image build-frontend-image build-mcp-images
+build-all-images: build-chatbot-image build-agent-image build-ran-anomaly-image build-ran-rca-image build-ran-chatbot-image build-frontend-image build-mcp-images
 
 .PHONY: build-chatbot-image
 build-chatbot-image:
@@ -377,6 +380,10 @@ build-ran-anomaly-image:
 .PHONY: build-ran-rca-image
 build-ran-rca-image:
 	$(CONTAINER_TOOL) build -t $(RAN_RCA_IMG) --platform=$(ARCH) -f $(RAN_RCA_CONTAINERFILE) $(RAN_RCA_CONTEXT)
+
+.PHONY: build-ran-chatbot-image
+build-ran-chatbot-image:
+	$(CONTAINER_TOOL) build -t $(RAN_CHATBOT_IMG) --platform=$(ARCH) -f hub/ran-chatbot-service/Containerfile hub/ran-chatbot-service
 
 .PHONY: build-frontend-image
 build-frontend-image:
@@ -523,6 +530,7 @@ unit-tests:
 	cd hub/telco-oran && uv sync --group dev && uv run pytest
 	cd hub/ran-anomaly-detector && uv sync --group dev && uv run pytest
 	cd hub/ran-rca-service && uv sync --group dev && uv run pytest
+	cd hub/ran-chatbot-service && uv sync --group dev && uv run pytest
 
 .PHONY: integration-tests
 integration-tests:

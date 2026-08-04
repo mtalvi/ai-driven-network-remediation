@@ -6,6 +6,7 @@ image:
   agentService: hub-agent-service
   ranAnomalyDetector: hub-ran-anomaly-detector
   ranRcaService: hub-ran-rca-service
+  ranChatbotService: hub-ran-chatbot-service
   frontend: noc-frontend
   pullPolicy: Always
   tag: "0.0.1"
@@ -460,6 +461,41 @@ ranRcaService:
     kafkaGroupId: "ran-rca-service"
     kafkaConsumerEnabled: "true"
     recentAnomaliesLimit: "100"
+  service:
+    type: ClusterIP
+    port: 8003
+    targetPort: 8003
+  resources: {}
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8003
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8003
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+# ══════════════════════════════════════════════════════════════════════
+# RAN Chatbot Entrypoint (Telco/O-RAN) — thin conversational BFF over
+# detected RAN anomalies and their root cause analysis. Independent from
+# ranAnomalyDetector, ranRcaService, and chatbotService (the network
+# remediation NOC chatbot). Can be disabled (ranChatbotService.enabled:
+# false) for deployments that don't need the Telco/O-RAN use case.
+# ══════════════════════════════════════════════════════════════════════
+
+ranChatbotService:
+  enabled: true
+  replicaCount: 1
+  env:
+    kafkaBootstrap: "kafka:9092"
+    enrichedAnomaliesTopic: "ran-anomalies-enriched"
+    modelApiUrl: "http://llamastack-service:8321/v1/completions"
+    modelName: "granite-4-h-tiny"
+    corsOrigins: "http://localhost:3000"
   service:
     type: ClusterIP
     port: 8003
