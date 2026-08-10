@@ -14,12 +14,18 @@ This is an independent workflow/deployment from `hub/chatbot-service` (the netwo
 NOC chatbot): different domain, different Kafka topics, different persona/prompt, and it can be
 enabled/disabled separately in Helm.
 
-## Current status: anomaly data is a stub
+## Where the anomaly data comes from
 
-`ran-rca-service` (which will publish enriched anomalies — `root_cause` + `recommended_fix` —
-to the `ran-anomalies-enriched` Kafka topic) has not been built yet. Until it lands, this service
-returns a hardcoded set of example enriched anomalies from
-[`kafka.py`](src/ran_chatbot_service/kafka.py), matching the agreed output contract exactly:
+[`kafka.py`](src/ran_chatbot_service/kafka.py)'s `fetch_recent_anomalies()` reads the
+`ENRICHED_ANOMALIES_TOPIC` Kafka topic (`ran-anomalies-enriched` by default, see
+[`config.py`](src/ran_chatbot_service/config.py)) using a seek-to-end `KafkaConsumer`, following
+the same pattern as
+[`hub/chatbot-service/src/chatbot_service/kafka.py`](../chatbot-service/src/chatbot_service/kafka.py)'s
+`fetch_recent_audits()`. That topic is populated by
+[`ran-rca-service`](../ran-rca-service) (LLM root cause analysis + RAG-based recommended fix),
+which enriches each anomaly detected by [`ran-anomaly-detector`](../ran-anomaly-detector) with
+`root_cause` and `recommended_fix`, matching this output contract
+(`contracts/ran-anomaly-enriched.schema.json`):
 
 ```json
 {
@@ -32,14 +38,9 @@ returns a hardcoded set of example enriched anomalies from
 }
 ```
 
-See the `TODO(ran-rca-service)` comment on `fetch_recent_anomalies()` in
-[`kafka.py`](src/ran_chatbot_service/kafka.py) for exactly what to change once that service is
-deployed — a real `KafkaConsumer` against `ENRICHED_ANOMALIES_TOPIC`
-(`ran-anomalies-enriched`, already wired in [`config.py`](src/ran_chatbot_service/config.py)),
-following the same seek-to-end pattern as
-[`hub/chatbot-service/src/chatbot_service/kafka.py`](../chatbot-service/src/chatbot_service/kafka.py)'s
-`fetch_recent_audits()`. No other code (including the `/ready` dependency check or `/api/chat`)
-needs to change for that swap.
+Unlike `fetch_recent_audits()`, there's no timestamp-based lookback filtering here — enriched
+anomaly records carry no timestamp field, so `fetch_recent_anomalies()` just takes the most
+recent `ENRICHED_ANOMALIES_MAX_MESSAGES` records instead.
 
 ## Usage
 

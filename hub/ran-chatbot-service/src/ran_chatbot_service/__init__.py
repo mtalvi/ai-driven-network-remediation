@@ -6,9 +6,9 @@ analysis use case. Delegates all domain logic (anomaly detection, root cause
 analysis, recommended fix retrieval) to upstream services — this service only
 handles the conversational interface and reply formatting.
 
-Anomaly data is currently backed by a stub (see kafka.py) pending the
-ran-rca-service that will publish enriched anomalies to the
-`ran-anomalies-enriched` Kafka topic.
+Anomaly data comes from ran-rca-service, which publishes enriched anomalies
+(root_cause + recommended_fix added) to the `ran-anomalies-enriched` Kafka
+topic — see kafka.py.
 
 Endpoints:
   GET  /health   - Liveness probe
@@ -72,7 +72,7 @@ async def ready():
     """Readiness probe — reports dependency status but always passes.
 
     The BFF gracefully degrades when dependencies are unavailable (fallback
-    chat, anomaly stub), so it can always serve useful traffic. Dependency
+    chat, empty anomaly list), so it can always serve useful traffic. Dependency
     status is informational.
     """
     checks: dict[str, bool] = {}

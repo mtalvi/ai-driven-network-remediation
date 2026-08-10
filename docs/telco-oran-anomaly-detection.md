@@ -252,8 +252,7 @@ automatically on every deployment, which is exactly what `ran-rca-service` (belo
 **Update:** the "LLM-based root cause + recommended fix" row above is now built as its own
 service, `ran-rca-service` — see [`docs/telco-oran-rca.md`](telco-oran-rca.md) for how it works,
 and [§10](#10-the-chatbot-entrypoint-new-talking-to-detected-anomalies) below for the chatbot
-entrypoint, which still answers from a stub pending being wired up to consume
-`ran-rca-service`'s real output.
+entrypoint, which now consumes `ran-rca-service`'s real enriched output directly.
 
 ---
 
@@ -288,11 +287,13 @@ For comparison, here's what the equivalent roles are in Workflow 1 (already exis
 | Domain model & rule engine (reused, unchanged) | [`hub/telco-oran/`](../hub/telco-oran/) |
 | New anomaly-detection service | [`hub/ran-anomaly-detector/`](../hub/ran-anomaly-detector/) |
 | Vendor doc RAG ingestion (`telco_oran_docs` vector store, done) | [`hub/ingestion-pipeline/`](../hub/ingestion-pipeline/) (extended, not a new service) |
+| Root cause analysis service (RAG + Granite LLM) | [`hub/ran-rca-service/`](../hub/ran-rca-service/), see [`docs/telco-oran-rca.md`](telco-oran-rca.md) |
 | Chatbot entrypoint (see [§10](#10-the-chatbot-entrypoint-new-talking-to-detected-anomalies)) | [`hub/ran-chatbot-service/`](../hub/ran-chatbot-service/) |
-| New Kafka topic definition | [`hub/helm/charts/kafka/values.yaml`](../hub/helm/charts/kafka/values.yaml) |
+| New Kafka topic definitions | [`hub/helm/charts/kafka/values.yaml`](../hub/helm/charts/kafka/values.yaml) |
 | New Helm Deployment/Service (detector) | [`hub/helm/templates/ran-anomaly-detector.yaml`](../hub/helm/templates/ran-anomaly-detector.yaml) |
+| New Helm Deployment/Service (RCA) | [`hub/helm/templates/ran-rca-service.yaml`](../hub/helm/templates/ran-rca-service.yaml) |
 | New Helm Deployment/Service (chatbot) | [`hub/helm/templates/ran-chatbot-service.yaml`](../hub/helm/templates/ran-chatbot-service.yaml) |
-| New Helm values blocks | [`hub/helm/values.yaml`](../hub/helm/values.yaml) (`ranAnomalyDetector:` and `ranChatbotService:` sections) |
+| New Helm values blocks | [`hub/helm/values.yaml`](../hub/helm/values.yaml) (`ranAnomalyDetector:`, `ranRcaService:`, and `ranChatbotService:` sections) |
 | Existing edge-infrastructure workflow | [`docs/architecture.md`](architecture.md), [`docs/graph-nodes.md`](graph-nodes.md) |
 
 Try it locally without any Kafka/OpenShift setup:
@@ -324,14 +325,17 @@ analysis itself. All of that domain logic lives upstream — `ran-anomaly-detect
 [`docs/telco-oran-rca.md`](telco-oran-rca.md)). This service only turns already-enriched anomaly
 data into a conversational reply.
 
-### 10.2 Current status: anomaly data is a stub
+### 10.2 How it consumes `ran-rca-service`'s output
 
-`ran-rca-service` now exists and publishes to the `ran-anomalies-enriched` Kafka topic (see
-[`docs/telco-oran-rca.md`](telco-oran-rca.md)), but `ran-chatbot-service` hasn't been wired up to
-consume it yet — that swap is the next piece of work. Until it's done, `ran-chatbot-service`
-answers using a small hardcoded set of example enriched anomalies (see
-[`kafka.py`](../hub/ran-chatbot-service/src/ran_chatbot_service/kafka.py)), matching the exact
-contract `ran-rca-service` actually produces:
+[`kafka.py`](../hub/ran-chatbot-service/src/ran_chatbot_service/kafka.py)'s
+`fetch_recent_anomalies()` reads the `ran-anomalies-enriched` Kafka topic (`ENRICHED_ANOMALIES_TOPIC`,
+wired as an environment variable in
+[`config.py`](../hub/ran-chatbot-service/src/ran_chatbot_service/config.py) and in Helm) using a
+seek-to-end `KafkaConsumer`, following the same pattern already used by
+`hub/chatbot-service`'s `fetch_recent_audits()`. Since enriched anomaly records carry no
+timestamp field (unlike incident-audit records), there's no lookback-window filtering — it simply
+takes the most recent `ENRICHED_ANOMALIES_MAX_MESSAGES` records. Each record matches
+`contracts/ran-anomaly-enriched.schema.json`, produced by `ran-rca-service` exactly like this:
 
 ```json
 {
@@ -344,30 +348,24 @@ contract `ran-rca-service` actually produces:
 }
 ```
 
-A `TODO(ran-rca-service)` comment on `fetch_recent_anomalies()` in that same file marks exactly
-what to change now that the real service is deployed: swap the stub for a real `KafkaConsumer`
-against `ENRICHED_ANOMALIES_TOPIC` (already wired as an environment variable in
-[`config.py`](../hub/ran-chatbot-service/src/ran_chatbot_service/config.py) and in Helm), following
-the same seek-to-end consumer pattern already used by `hub/chatbot-service`. No other code —
-including the `/ready` dependency check or the `/api/chat` endpoint — needs to change for that
-swap.
+If Kafka is unreachable or the topic has no messages yet, `fetch_recent_anomalies()` degrades
+gracefully (returns an empty list, or reports `kafka: false` in `/api/chat`'s `_deps` envelope)
+rather than failing the request — the LLM still replies, just without anomaly context.
 
-### 10.3 End-to-end flow (today)
+### 10.3 End-to-end flow
 
 ```mermaid
 flowchart LR
+    detector["ran-anomaly-detector"] -->|"ran-anomalies"| rca["ran-rca-service\n(RAG + Granite LLM)"]
+    rca -->|"ran-anomalies-enriched"| fetch["kafka.py: fetch_recent_anomalies()"]
     operator["NOC / RAN operator"] -->|"POST /api/chat\n{message}"| bff["ran-chatbot-service"]
-    bff --> stub["kafka.py: fetch_recent_anomalies()\n(hardcoded stub anomalies)"]
-    stub --> ctx["chat.py: build_chat_context()"]
+    bff --> fetch
+    fetch --> ctx["chat.py: build_chat_context()"]
     ctx --> llm["LLM (Granite via LlamaStack)"]
     llm --> fmt["chat.py: format_chat_reply()"]
     fmt --> bff
     bff -->|"reply"| operator
 ```
-
-Once the stub is swapped out, the only change is what feeds `chat.py`: real messages consumed
-from `ran-anomalies-enriched` instead of the hardcoded list — the conversational logic downstream
-of that point does not change.
 
 ### 10.4 Out of scope for this entrypoint
 

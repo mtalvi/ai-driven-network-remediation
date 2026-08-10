@@ -1,8 +1,57 @@
-"""Unit tests for helper functions: dependency envelope, anomaly stub, chat formatting."""
+"""Unit tests for helper functions: dependency envelope, Kafka fetch, chat formatting."""
+
+import json
 
 from ran_chatbot_service.chat import build_chat_context, format_chat_reply
 from ran_chatbot_service.kafka import fetch_recent_anomalies
 from ran_chatbot_service.utils import build_deps, normalize_session_id
+
+_SAMPLE_ANOMALY = {
+    "cell_id": 42,
+    "band": "Band 29",
+    "anomaly_type": "LowRsrp",
+    "anomaly": "Low RSRP: -125.0 dBm < -110.0 dBm",
+    "root_cause": "Poor radio conditions.",
+    "recommended_fix": "Section 4.2 — Antenna Tilt Adjustment",
+}
+
+
+class _FakeMessage:
+    def __init__(self, value: str, offset: int = 0) -> None:
+        self.value = value
+        self.offset = offset
+
+
+class _FakeKafkaConsumer:
+    """Minimal stand-in for kafka.KafkaConsumer supporting the seek-to-end read
+    pattern used by fetch_recent_anomalies() (assignment/end_offsets/seek/iter)."""
+
+    def __init__(self, *args, messages: list[_FakeMessage] | None = None, **kwargs) -> None:
+        self._messages = list(messages or [])
+        self.closed = False
+
+    def poll(self, timeout_ms: int = 800):
+        return {}
+
+    def assignment(self):
+        return {"tp0"}
+
+    def end_offsets(self, partitions):
+        return {p: len(self._messages) for p in partitions}
+
+    def seek(self, partition, offset) -> None:
+        pass
+
+    def __iter__(self):
+        return iter(self._messages)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _NoPartitionsKafkaConsumer(_FakeKafkaConsumer):
+    def assignment(self):
+        return set()
 
 
 class TestBuildDeps:
@@ -33,20 +82,45 @@ class TestNormalizeSessionId:
 
 
 class TestFetchRecentAnomalies:
-    def test_returns_stub_anomalies_and_true(self):
-        anomalies, ok = fetch_recent_anomalies()
-        assert ok is True
-        assert len(anomalies) > 0
-        for anomaly in anomalies:
-            assert {"cell_id", "band", "anomaly_type", "anomaly", "root_cause", "recommended_fix"} <= set(
-                anomaly.keys()
-            )
+    def test_returns_parsed_enriched_anomalies(self, monkeypatch):
+        messages = [_FakeMessage(json.dumps(_SAMPLE_ANOMALY), offset=0)]
+        monkeypatch.setattr("kafka.KafkaConsumer", lambda *a, **kw: _FakeKafkaConsumer(messages=messages))
 
-    def test_returns_a_copy_not_shared_mutable_state(self):
-        first, _ = fetch_recent_anomalies()
-        first.append({"cell_id": 999})
-        second, _ = fetch_recent_anomalies()
-        assert len(second) < len(first)
+        anomalies, ok = fetch_recent_anomalies()
+
+        assert ok is True
+        assert anomalies == [_SAMPLE_ANOMALY]
+
+    def test_skips_malformed_messages(self, monkeypatch):
+        messages = [
+            _FakeMessage("not valid json", offset=0),
+            _FakeMessage(json.dumps(_SAMPLE_ANOMALY), offset=1),
+        ]
+        monkeypatch.setattr("kafka.KafkaConsumer", lambda *a, **kw: _FakeKafkaConsumer(messages=messages))
+
+        anomalies, ok = fetch_recent_anomalies()
+
+        assert ok is True
+        assert anomalies == [_SAMPLE_ANOMALY]
+
+    def test_returns_empty_when_no_partitions_assigned(self, monkeypatch):
+        monkeypatch.setattr("kafka.KafkaConsumer", lambda *a, **kw: _NoPartitionsKafkaConsumer())
+
+        anomalies, ok = fetch_recent_anomalies()
+
+        assert ok is True
+        assert anomalies == []
+
+    def test_kafka_unreachable_returns_false(self, monkeypatch):
+        def _raise(*args, **kwargs):
+            raise RuntimeError("connection refused")
+
+        monkeypatch.setattr("kafka.KafkaConsumer", _raise)
+
+        anomalies, ok = fetch_recent_anomalies()
+
+        assert ok is False
+        assert anomalies == []
 
 
 class TestBuildChatContext:

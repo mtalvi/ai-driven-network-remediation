@@ -9,10 +9,10 @@ APP_VERSION = "0.1.0"
 # ── Kafka ─────────────────────────────────────────────────────────
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 
-# Pre-wired now so that swapping kafka.py's stub for a real consumer later
-# (once ran-rca-service is deployed) requires no Helm/config changes, only
-# a code change in kafka.py. See kafka.py:fetch_recent_anomalies.
+# Topic ran-rca-service publishes LLM-enriched anomalies to (root_cause +
+# recommended_fix added). See kafka.py:fetch_recent_anomalies.
 ENRICHED_ANOMALIES_TOPIC = os.getenv("ENRICHED_ANOMALIES_TOPIC", "ran-anomalies-enriched")
+ENRICHED_ANOMALIES_MAX_MESSAGES = int(os.getenv("ENRICHED_ANOMALIES_MAX_MESSAGES", "50"))
 
 # ── LLM ───────────────────────────────────────────────────────────
 MODEL_API_URL = os.getenv("MODEL_API_URL", "http://llamastack-service:8321/v1/completions")
