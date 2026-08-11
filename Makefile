@@ -61,10 +61,17 @@ RAN_ANOMALY_CONTEXT         := hub
 RAN_RCA_CONTAINERFILE       := hub/ran-rca-service/Containerfile
 RAN_RCA_CONTEXT             := hub
 
-# agent-service depends on the sibling shared package via a local
-# uv path source, so its build context must be `hub/`, not its own directory.
+# agent-service, chatbot-service, and ran-chatbot-service all depend on the
+# sibling shared package via a local uv path source, so their build context
+# must be `hub/`, not their own directory.
 AGENT_CONTAINERFILE         := hub/agent-service/Containerfile
 AGENT_CONTEXT               := hub
+
+CHATBOT_CONTAINERFILE       := hub/chatbot-service/Containerfile
+CHATBOT_CONTEXT             := hub
+
+RAN_CHATBOT_CONTAINERFILE   := hub/ran-chatbot-service/Containerfile
+RAN_CHATBOT_CONTEXT         := hub
 
 # ── Feature flags ─────────────────────────────────────────────────
 ENABLE_HUB             ?= true
@@ -586,7 +593,7 @@ build-all-images: build-chatbot-image build-agent-image build-ran-anomaly-image 
 
 .PHONY: build-chatbot-image
 build-chatbot-image:
-	$(CONTAINER_TOOL) build -t $(CHATBOT_IMG) --platform=$(ARCH) -f hub/chatbot-service/Containerfile hub/chatbot-service
+	$(CONTAINER_TOOL) build -t $(CHATBOT_IMG) --platform=$(ARCH) -f $(CHATBOT_CONTAINERFILE) $(CHATBOT_CONTEXT)
 	$(CONTAINER_TOOL) build -t $(INGESTION_IMG) --platform=$(ARCH) -f hub/ingestion-pipeline/Containerfile hub/ingestion-pipeline
 
 .PHONY: build-agent-image
@@ -603,7 +610,7 @@ build-ran-rca-image:
 
 .PHONY: build-ran-chatbot-image
 build-ran-chatbot-image:
-	$(CONTAINER_TOOL) build -t $(RAN_CHATBOT_IMG) --platform=$(ARCH) -f hub/ran-chatbot-service/Containerfile hub/ran-chatbot-service
+	$(CONTAINER_TOOL) build -t $(RAN_CHATBOT_IMG) --platform=$(ARCH) -f $(RAN_CHATBOT_CONTAINERFILE) $(RAN_CHATBOT_CONTEXT)
 
 .PHONY: build-frontend-image
 build-frontend-image:
