@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 from ran_chatbot_service import app
@@ -15,7 +17,13 @@ SAMPLE_ANOMALY_DICT = {
 
 @pytest.fixture()
 def client():
-    return TestClient(app)
+    # Patch out the real background Kafka consumer so the lifespan startup event
+    # doesn't try to connect to a real broker; using TestClient as a context
+    # manager triggers that lifespan (startup populates app.state.recent_anomalies
+    # / app.state.kafka_consumer, shutdown calls consumer.stop()).
+    with patch("ran_chatbot_service.AnomaliesConsumer"):
+        with TestClient(app) as test_client:
+            yield test_client
 
 
 @pytest.fixture()

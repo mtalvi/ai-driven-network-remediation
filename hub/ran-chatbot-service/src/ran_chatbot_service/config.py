@@ -10,7 +10,7 @@ APP_VERSION = "0.1.0"
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 
 # Topic ran-rca-service publishes LLM-enriched anomalies to (root_cause +
-# recommended_fix added). See kafka.py:fetch_recent_anomalies.
+# recommended_fix added). See kafka.py:AnomaliesConsumer.
 ENRICHED_ANOMALIES_TOPIC = os.getenv("ENRICHED_ANOMALIES_TOPIC", "ran-anomalies-enriched")
 ENRICHED_ANOMALIES_MAX_MESSAGES = int(os.getenv("ENRICHED_ANOMALIES_MAX_MESSAGES", "50"))
 

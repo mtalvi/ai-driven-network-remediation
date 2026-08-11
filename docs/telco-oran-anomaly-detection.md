@@ -327,14 +327,19 @@ data into a conversational reply.
 
 ### 10.2 How it consumes `ran-rca-service`'s output
 
-[`kafka.py`](../hub/ran-chatbot-service/src/ran_chatbot_service/kafka.py)'s
-`fetch_recent_anomalies()` reads the `ran-anomalies-enriched` Kafka topic (`ENRICHED_ANOMALIES_TOPIC`,
-wired as an environment variable in
-[`config.py`](../hub/ran-chatbot-service/src/ran_chatbot_service/config.py) and in Helm) using a
-seek-to-end `KafkaConsumer`, following the same pattern already used by
-`hub/chatbot-service`'s `fetch_recent_audits()`. Since enriched anomaly records carry no
-timestamp field (unlike incident-audit records), there's no lookback-window filtering — it simply
-takes the most recent `ENRICHED_ANOMALIES_MAX_MESSAGES` records. Each record matches
+[`kafka.py`](../hub/ran-chatbot-service/src/ran_chatbot_service/kafka.py)'s `AnomaliesConsumer` is a
+single background thread, started at app startup, that owns the `ran-anomalies-enriched` Kafka
+connection (`ENRICHED_ANOMALIES_TOPIC`, wired as an environment variable in
+[`config.py`](../hub/ran-chatbot-service/src/ran_chatbot_service/config.py) and in Helm) and
+continuously fills an in-memory buffer (`deque(maxlen=ENRICHED_ANOMALIES_MAX_MESSAGES)`) — the same
+background-thread-plus-buffer pattern already used by `ran-anomaly-detector`'s `MetricsConsumer`.
+`POST /api/chat` just reads that buffer directly (an instant in-memory operation, no Kafka I/O on
+the request path at all). On connect (and on every reconnect), it seeks each partition back a
+bounded window and drains it so the buffer is pre-populated with recent history immediately,
+instead of only filling in as new anomalies trickle in. It deliberately does **not** use a Kafka
+consumer group: the topic has multiple partitions, and a shared group would split them across
+`ran-chatbot-service` replicas if ever scaled beyond one, giving each replica only a partial view —
+staying group-less means every replica independently sees the full topic. Each record matches
 `contracts/ran-anomaly-enriched.schema.json`, produced by `ran-rca-service` exactly like this:
 
 ```json
@@ -348,19 +353,21 @@ takes the most recent `ENRICHED_ANOMALIES_MAX_MESSAGES` records. Each record mat
 }
 ```
 
-If Kafka is unreachable or the topic has no messages yet, `fetch_recent_anomalies()` degrades
-gracefully (returns an empty list, or reports `kafka: false` in `/api/chat`'s `_deps` envelope)
-rather than failing the request — the LLM still replies, just without anomaly context.
+If Kafka is unreachable or the topic has no messages yet, the buffer just stays empty and
+`AnomaliesConsumer.is_connected` reports `false` (surfaced as `kafka: false` in `/api/chat`'s
+`_deps` envelope and in `/ready`) rather than failing the request — the LLM still replies, just
+without anomaly context.
 
 ### 10.3 End-to-end flow
 
 ```mermaid
 flowchart LR
     detector["ran-anomaly-detector"] -->|"ran-anomalies"| rca["ran-rca-service\n(RAG + Granite LLM)"]
-    rca -->|"ran-anomalies-enriched"| fetch["kafka.py: fetch_recent_anomalies()"]
+    rca -->|"ran-anomalies-enriched"| consumer["kafka.py: AnomaliesConsumer\n(background thread)"]
+    consumer --> buffer[("in-memory buffer\napp.state.recent_anomalies")]
     operator["NOC / RAN operator"] -->|"POST /api/chat\n{message}"| bff["ran-chatbot-service"]
-    bff --> fetch
-    fetch --> ctx["chat.py: build_chat_context()"]
+    bff -->|"list(buffer)\n(instant, no I/O)"| buffer
+    bff --> ctx["chat.py: build_chat_context()"]
     ctx --> llm["LLM (Granite via LlamaStack)"]
     llm --> fmt["chat.py: format_chat_reply()"]
     fmt --> bff
@@ -370,4 +377,8 @@ flowchart LR
 ### 10.4 Out of scope for this entrypoint
 
 No frontend/UI work is included here — a dedicated O-RAN web dashboard is a separate, later task.
-`ran-chatbot-service` is currently testable directly via its REST API (`POST /api/chat`).
+`ran-chatbot-service` is currently testable directly via its REST API (`POST /api/chat`), and has
+black-box integration test coverage in
+[`hub/integration-tests/tests/ran_chatbot_service/`](../hub/integration-tests/tests/ran_chatbot_service/)
+(run via `make integration-tests` against a deployed cluster, alongside `hub/chatbot-service`'s
+equivalent suite), on top of its own unit tests in `hub/ran-chatbot-service/tests/`.

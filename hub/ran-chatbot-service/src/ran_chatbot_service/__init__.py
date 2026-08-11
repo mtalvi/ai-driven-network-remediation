@@ -8,7 +8,9 @@ handles the conversational interface and reply formatting.
 
 Anomaly data comes from ran-rca-service, which publishes enriched anomalies
 (root_cause + recommended_fix added) to the `ran-anomalies-enriched` Kafka
-topic — see kafka.py.
+topic. A background thread (AnomaliesConsumer, see kafka.py) continuously
+fills an in-memory buffer from that topic; request handlers just read the
+buffer directly, with no per-request Kafka I/O.
 
 Endpoints:
   GET  /health   - Liveness probe
@@ -19,16 +21,28 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-import socket
+from collections import deque
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+import httpx
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .chat import build_chat_context, call_model, format_chat_reply
-from .config import APP_VERSION, CORS_ORIGINS, KAFKA_BOOTSTRAP, MODEL_API_URL, MODEL_NAME
-from .kafka import fetch_recent_anomalies
-from .models import ModelSource
+from .config import (
+    APP_VERSION,
+    CORS_ORIGINS,
+    ENRICHED_ANOMALIES_MAX_MESSAGES,
+    ENRICHED_ANOMALIES_TOPIC,
+    KAFKA_BOOTSTRAP,
+    MODEL_API_URL,
+    MODEL_NAME,
+    MODEL_TIMEOUT_SECONDS,
+    SSL_VERIFY,
+)
+from .kafka import AnomaliesConsumer
+from .models import EnrichedAnomaly, ModelSource
 from .probes import probe_http
 from .utils import build_deps, normalize_session_id, utc_now
 
@@ -38,10 +52,38 @@ logger = logging.getLogger(__name__)
 MAX_CHAT_SESSIONS = 100
 chat_sessions: dict[str, list[dict[str, str]]] = {}
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    recent_anomalies: deque[EnrichedAnomaly] = deque(maxlen=ENRICHED_ANOMALIES_MAX_MESSAGES)
+    app.state.recent_anomalies = recent_anomalies
+
+    consumer = AnomaliesConsumer(
+        recent_anomalies,
+        bootstrap_servers=KAFKA_BOOTSTRAP,
+        topic=ENRICHED_ANOMALIES_TOPIC,
+        max_messages=ENRICHED_ANOMALIES_MAX_MESSAGES,
+    )
+    consumer.start()
+    app.state.kafka_consumer = consumer
+
+    # Shared across requests rather than one-per-call: httpx.AsyncClient is designed
+    # for exactly this (safe for concurrent use within one event loop), and reusing
+    # it gives connection pooling/keep-alive to MODEL_API_URL instead of a fresh
+    # TCP/TLS handshake on every /api/chat request.
+    app.state.http_client = httpx.AsyncClient(timeout=MODEL_TIMEOUT_SECONDS, verify=SSL_VERIFY)
+
+    yield
+
+    consumer.stop()
+    await app.state.http_client.aclose()
+
+
 app = FastAPI(
     title="RAN Chatbot BFF",
     version=APP_VERSION,
     description="Thin conversational entrypoint for the Telco O-RAN anomaly detection and root cause analysis use case",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -69,22 +111,14 @@ def health() -> dict:
 
 
 @app.get("/ready")
-async def ready():
+async def ready(request: Request):
     """Readiness probe — reports dependency status but always passes.
 
     The BFF gracefully degrades when dependencies are unavailable (fallback
     chat, empty anomaly list), so it can always serve useful traffic. Dependency
     status is informational.
     """
-    checks: dict[str, bool] = {}
-
-    try:
-        host, port = KAFKA_BOOTSTRAP.split(",")[0].rsplit(":", 1)
-        sock = socket.create_connection((host, int(port)), timeout=2)
-        sock.close()
-        checks["kafka"] = True
-    except OSError:
-        checks["kafka"] = False
+    checks: dict[str, bool] = {"kafka": request.app.state.kafka_consumer.is_connected}
 
     llm_probe = await probe_http(MODEL_API_URL, timeout=2.0)
     checks["llm"] = llm_probe["reachable"]
@@ -93,7 +127,7 @@ async def ready():
 
 
 @app.post("/api/chat")
-async def chat(req: ChatRequest) -> dict:
+async def chat(req: ChatRequest, request: Request) -> dict:
     msg = req.message.strip()
     if not msg:
         return {"reply": "Please enter a question.", "session_id": normalize_session_id(req.session_id)}
@@ -104,10 +138,13 @@ async def chat(req: ChatRequest) -> dict:
         del chat_sessions[oldest]
     history = chat_sessions.setdefault(session_id, [])
 
-    anomalies, kafka_ok = fetch_recent_anomalies()
+    # The background AnomaliesConsumer keeps this buffer filled, so reading it here
+    # is an instant in-memory operation — no Kafka I/O on the request path at all.
+    anomalies = list(request.app.state.recent_anomalies)
+    kafka_ok = request.app.state.kafka_consumer.is_connected
 
     prompt = build_chat_context(msg, anomalies, history)
-    raw_reply, model_source = await call_model(prompt)
+    raw_reply, model_source = await call_model(prompt, request.app.state.http_client)
     reply = format_chat_reply(msg, raw_reply, anomalies)
 
     history.append({"role": "user", "content": msg})
