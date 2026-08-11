@@ -3,7 +3,7 @@
 import httpx
 import pytest
 import respx
-from shared_utils.probes import probe_http
+from shared.probes import probe_http
 
 URL = "http://example-service:8000/health"
 

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from shared_utils.utils import build_deps, normalize_session_id, utc_now
+from shared.utils import build_deps, normalize_session_id, utc_now
 
 
 class TestUtcNow:

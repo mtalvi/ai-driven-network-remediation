@@ -1,6 +1,6 @@
 """Unit tests for helper functions: SLO computation, demo events, normalization.
 
-build_deps() and normalize_session_id() are tested in hub/shared-utils/tests
+build_deps() and normalize_session_id() are tested in hub/shared/tests
 instead, since that's where they now live.
 """
 

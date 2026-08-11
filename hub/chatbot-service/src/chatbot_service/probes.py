@@ -1,7 +1,7 @@
 """HTTP health probes for ServiceNow.
 
 The generic probe_http() helper (used for MCP server reachability too) now
-lives in the shared `shared_utils` package instead — see hub/shared-utils.
+lives in the shared `shared` package instead — see hub/shared.
 """
 
 from __future__ import annotations

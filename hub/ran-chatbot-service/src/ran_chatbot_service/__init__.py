@@ -28,7 +28,8 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from shared_utils import build_deps, normalize_session_id, probe_http, utc_now
+from shared.probes import probe_http
+from shared.utils import build_deps, normalize_session_id, utc_now
 
 from .chat import build_chat_context, call_model, format_chat_reply
 from .config import (

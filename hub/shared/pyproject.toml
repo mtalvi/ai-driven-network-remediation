@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "httpx>=0.28",
     "kafka-python-ng>=2.2",
     "llama-stack-client>=0.6.1,<0.7",
     "loguru>=0.7.0",
@@ -23,6 +24,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=6.0",
+    "respx>=0.22",
 ]
 
 [build-system]

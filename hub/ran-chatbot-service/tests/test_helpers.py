@@ -1,6 +1,6 @@
 """Unit tests for helper functions: chat formatting.
 
-build_deps() and normalize_session_id() are tested in hub/shared-utils/tests
+build_deps() and normalize_session_id() are tested in hub/shared/tests
 instead, since that's where they now live. Kafka consumption itself
 (AnomaliesConsumer) is tested separately in test_kafka_consumer.py.
 """

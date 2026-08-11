@@ -1234,6 +1234,7 @@ name = "shared"
 version = "0.1.0"
 source = { directory = "../shared" }
 dependencies = [
+    { name = "httpx" },
     { name = "kafka-python-ng" },
     { name = "llama-stack-client" },
     { name = "loguru" },
@@ -1241,6 +1242,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28" },
     { name = "kafka-python-ng", specifier = ">=2.2" },
     { name = "llama-stack-client", specifier = ">=0.6.1,<0.7" },
     { name = "loguru", specifier = ">=0.7.0" },
@@ -1251,6 +1253,7 @@ dev = [
     { name = "pytest", specifier = ">=7.4.0" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=6.0" },
+    { name = "respx", specifier = ">=0.22" },
 ]
 
 [[package]]

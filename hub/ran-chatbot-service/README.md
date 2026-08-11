@@ -14,8 +14,10 @@ This is an independent workflow/deployment from `hub/chatbot-service` (the netwo
 NOC chatbot): different domain, different Kafka topics, different persona/prompt, and it can be
 enabled/disabled separately in Helm. The two services do share one thing: a handful of
 domain-free infrastructure helpers (`utc_now`, `normalize_session_id`, `build_deps`, `probe_http`)
-factored out into [`hub/shared-utils`](../shared-utils/), a local package depended on via a `uv`
-path source, so fixes to that plumbing aren't duplicated across both services.
+factored out into [`hub/shared`](../shared/) (`shared.utils` / `shared.probes`), a local package
+depended on via a `uv` path source, so fixes to that plumbing aren't duplicated across both
+services. `hub/shared` is also used by `ran-anomaly-detector`, `ran-rca-service`, and
+`agent-service` for its Kafka consumer and RAG client modules, unrelated to this service.
 
 ## Where the anomaly data comes from
 
@@ -58,7 +60,7 @@ uv sync --group dev
 uv run pytest
 ```
 
-`uv sync` resolves `shared-utils` from the sibling [`hub/shared-utils`](../shared-utils/)
-directory via a `uv` path source, so it must exist alongside this one (already true within this
-repo checkout). For the same reason, the container image's build context is `hub/`, not this
-directory — see `build-ran-chatbot-image` in the root `Makefile`.
+`uv sync` resolves `shared` from the sibling [`hub/shared`](../shared/) directory via a `uv` path
+source, so it must exist alongside this one (already true within this repo checkout). For the
+same reason, the container image's build context is `hub/`, not this directory — see
+`build-ran-chatbot-image` in the root `Makefile`.

@@ -189,7 +189,7 @@ The `contracts/` directory at the repo root contains JSON Schema definitions for
 hub/chatbot-service/src/chatbot_service/
 ├── __init__.py    # FastAPI app, endpoints, caching
 ├── config.py      # Env vars, probe targets, constants
-├── probes.py      # ServiceNow query (generic HTTP probing lives in shared_utils)
+├── probes.py      # ServiceNow query (generic HTTP probing lives in the shared package)
 ├── kafka.py       # Audit consumer, demo event producer
 ├── slo.py         # SLO metrics, incident timeline, business impact
 ├── chat.py        # LLM prompt building, model call, fallback
@@ -197,9 +197,11 @@ hub/chatbot-service/src/chatbot_service/
 ```
 
 Domain-free infra helpers (`utc_now`, `normalize_session_id`, `build_deps`, `probe_http`) live in
-[`hub/shared-utils`](../hub/shared-utils/), a local package (via a `uv` path source) shared with
-`ran-chatbot-service` so bug fixes to these helpers don't need to be duplicated across both
-services.
+[`hub/shared`](../hub/shared/) (`shared.utils` / `shared.probes`), a local package (via a `uv`
+path source) shared with `ran-chatbot-service` — as well as `ran-anomaly-detector`,
+`ran-rca-service`, and `agent-service`, which depend on other modules of the same package
+(`shared.kafka.TopicConsumer`, `shared.rag.RagClient`) — so bug fixes to these helpers don't need
+to be duplicated across services.
 
 ---
 
