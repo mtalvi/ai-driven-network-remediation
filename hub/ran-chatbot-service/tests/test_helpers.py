@@ -4,9 +4,10 @@ import json
 
 from ran_chatbot_service.chat import build_chat_context, format_chat_reply
 from ran_chatbot_service.kafka import fetch_recent_anomalies
+from ran_chatbot_service.models import EnrichedAnomaly
 from ran_chatbot_service.utils import build_deps, normalize_session_id
 
-_SAMPLE_ANOMALY = {
+_SAMPLE_ANOMALY_DICT = {
     "cell_id": 42,
     "band": "Band 29",
     "anomaly_type": "LowRsrp",
@@ -14,6 +15,7 @@ _SAMPLE_ANOMALY = {
     "root_cause": "Poor radio conditions.",
     "recommended_fix": "Section 4.2 — Antenna Tilt Adjustment",
 }
+_SAMPLE_ANOMALY = EnrichedAnomaly(**_SAMPLE_ANOMALY_DICT)
 
 
 class _FakeMessage:
@@ -83,7 +85,7 @@ class TestNormalizeSessionId:
 
 class TestFetchRecentAnomalies:
     def test_returns_parsed_enriched_anomalies(self, monkeypatch):
-        messages = [_FakeMessage(json.dumps(_SAMPLE_ANOMALY), offset=0)]
+        messages = [_FakeMessage(json.dumps(_SAMPLE_ANOMALY_DICT), offset=0)]
         monkeypatch.setattr("kafka.KafkaConsumer", lambda *a, **kw: _FakeKafkaConsumer(messages=messages))
 
         anomalies, ok = fetch_recent_anomalies()
@@ -94,7 +96,23 @@ class TestFetchRecentAnomalies:
     def test_skips_malformed_messages(self, monkeypatch):
         messages = [
             _FakeMessage("not valid json", offset=0),
-            _FakeMessage(json.dumps(_SAMPLE_ANOMALY), offset=1),
+            _FakeMessage(json.dumps(_SAMPLE_ANOMALY_DICT), offset=1),
+        ]
+        monkeypatch.setattr("kafka.KafkaConsumer", lambda *a, **kw: _FakeKafkaConsumer(messages=messages))
+
+        anomalies, ok = fetch_recent_anomalies()
+
+        assert ok is True
+        assert anomalies == [_SAMPLE_ANOMALY]
+
+    def test_skips_messages_missing_required_fields(self, monkeypatch):
+        """Regression test: a producer-side rename/omission of a required field
+        (e.g. cell_id) must be caught here, not silently propagate as None deep
+        into the chat reply."""
+        incomplete = {k: v for k, v in _SAMPLE_ANOMALY_DICT.items() if k != "cell_id"}
+        messages = [
+            _FakeMessage(json.dumps(incomplete), offset=0),
+            _FakeMessage(json.dumps(_SAMPLE_ANOMALY_DICT), offset=1),
         ]
         monkeypatch.setattr("kafka.KafkaConsumer", lambda *a, **kw: _FakeKafkaConsumer(messages=messages))
 
@@ -125,16 +143,7 @@ class TestFetchRecentAnomalies:
 
 class TestBuildChatContext:
     def test_includes_anomaly_details(self):
-        anomalies = [
-            {
-                "cell_id": 42,
-                "band": "Band 29",
-                "anomaly_type": "LowRsrp",
-                "anomaly": "Low RSRP: -125.0 dBm < -110.0 dBm",
-                "root_cause": "Poor radio conditions.",
-                "recommended_fix": "Section 4.2 — Antenna Tilt Adjustment",
-            }
-        ]
+        anomalies = [_SAMPLE_ANOMALY]
         prompt = build_chat_context("What's wrong with cell 42?", anomalies, [])
         assert "Cell 42" in prompt
         assert "Band 29" in prompt
@@ -153,19 +162,19 @@ class TestBuildChatContext:
         assert "user: hello" in prompt
         assert "assistant: hi" in prompt
 
+    def test_blank_root_cause_and_fix_render_as_na(self):
+        """Regression test: ran-rca-service publishes root_cause/recommended_fix as ""
+        (not omitted) when its own LLM/RAG enrichment fails, observed during E2E
+        testing. That must render as "n/a", not a blank line."""
+        anomaly = _SAMPLE_ANOMALY.model_copy(update={"root_cause": "", "recommended_fix": ""})
+        prompt = build_chat_context("What's wrong?", [anomaly], [])
+        assert "Root cause: n/a" in prompt
+        assert "Recommended fix: n/a" in prompt
+
 
 class TestFormatChatReply:
     def test_with_anomalies_and_live_reply(self):
-        anomalies = [
-            {
-                "cell_id": 42,
-                "band": "Band 29",
-                "anomaly_type": "LowRsrp",
-                "anomaly": "Low RSRP: -125.0 dBm < -110.0 dBm",
-                "root_cause": "Poor radio conditions.",
-                "recommended_fix": "Section 4.2 — Antenna Tilt Adjustment",
-            }
-        ]
+        anomalies = [_SAMPLE_ANOMALY]
         reply = format_chat_reply("What's wrong?", "Cell 42 has weak signal.", anomalies)
         assert "Anomalies detected: 1" in reply
         assert "Cell 42" in reply
@@ -181,3 +190,9 @@ class TestFormatChatReply:
     def test_falls_back_when_model_reply_is_empty(self):
         reply = format_chat_reply("Status?", "", [])
         assert "fallback" in reply.lower()
+
+    def test_blank_root_cause_and_fix_render_as_na(self):
+        anomaly = _SAMPLE_ANOMALY.model_copy(update={"root_cause": "", "recommended_fix": ""})
+        reply = format_chat_reply("What's wrong?", "insight", [anomaly])
+        assert "Root Cause:\n- n/a" in reply
+        assert "Recommended Fix:\n- n/a" in reply

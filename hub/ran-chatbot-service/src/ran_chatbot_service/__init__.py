@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from .chat import build_chat_context, call_model, format_chat_reply
 from .config import APP_VERSION, CORS_ORIGINS, KAFKA_BOOTSTRAP, MODEL_API_URL, MODEL_NAME
 from .kafka import fetch_recent_anomalies
+from .models import ModelSource
 from .probes import probe_http
 from .utils import build_deps, normalize_session_id, utc_now
 
@@ -117,7 +118,7 @@ async def chat(req: ChatRequest) -> dict:
     # Anything other than a genuine live reply (unreachable, disabled, empty, or an
     # http-<code> error) means the operator got a deterministic fallback, not a real
     # model answer, so it should be surfaced as degraded rather than "ok".
-    llm_ok = model_source == "live"
+    llm_ok = model_source == ModelSource.LIVE
     _deps = build_deps({"kafka": kafka_ok, "llm": llm_ok})
 
     return {

@@ -2,15 +2,17 @@
 
 from unittest.mock import AsyncMock, patch
 
+from ran_chatbot_service.models import EnrichedAnomaly
+
 _SAMPLE_ANOMALIES = [
-    {
-        "cell_id": 42,
-        "band": "Band 29",
-        "anomaly_type": "LowRsrp",
-        "anomaly": "Low RSRP: -125.0 dBm < -110.0 dBm",
-        "root_cause": "Poor radio conditions.",
-        "recommended_fix": "Section 4.2 — Antenna Tilt Adjustment",
-    }
+    EnrichedAnomaly(
+        cell_id=42,
+        band="Band 29",
+        anomaly_type="LowRsrp",
+        anomaly="Low RSRP: -125.0 dBm < -110.0 dBm",
+        root_cause="Poor radio conditions.",
+        recommended_fix="Section 4.2 — Antenna Tilt Adjustment",
+    )
 ]
 
 

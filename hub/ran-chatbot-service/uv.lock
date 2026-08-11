@@ -304,6 +304,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "kafka-python-ng" },
+    { name = "pydantic" },
     { name = "uvicorn" },
 ]
 
@@ -320,6 +321,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "kafka-python-ng", specifier = ">=2.2" },
+    { name = "pydantic", specifier = ">=2.0.0" },
     { name = "uvicorn", specifier = ">=0.34" },
 ]
 

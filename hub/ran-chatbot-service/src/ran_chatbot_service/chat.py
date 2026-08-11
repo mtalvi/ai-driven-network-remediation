@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import httpx
 
@@ -14,27 +13,31 @@ from .config import (
     MODEL_TIMEOUT_SECONDS,
     SSL_VERIFY,
 )
+from .models import EnrichedAnomaly, ModelSource
 
 logger = logging.getLogger(__name__)
 
 
-def _format_anomalies(anomalies: list[dict[str, Any]]) -> str:
+def _format_anomalies(anomalies: list[EnrichedAnomaly]) -> str:
     """Format enriched RAN anomalies for LLM context."""
     if not anomalies:
         return "No recent RAN anomalies detected."
     lines = []
     for a in anomalies[:5]:
+        # root_cause/recommended_fix are required-but-possibly-empty strings (ran-rca-service
+        # publishes "" rather than omitting the field when LLM enrichment itself failed), so
+        # `or "n/a"` is needed here — a plain default only covers the field being absent.
         lines.append(
-            f"  - Cell {a.get('cell_id')} ({a.get('band')}) [{a.get('anomaly_type')}]: {a.get('anomaly')}\n"
-            f"    Root cause: {a.get('root_cause', 'n/a')}\n"
-            f"    Recommended fix: {a.get('recommended_fix', 'n/a')}"
+            f"  - Cell {a.cell_id} ({a.band}) [{a.anomaly_type}]: {a.anomaly}\n"
+            f"    Root cause: {a.root_cause or 'n/a'}\n"
+            f"    Recommended fix: {a.recommended_fix or 'n/a'}"
         )
     return "\n".join(lines)
 
 
 def build_chat_context(
     user_message: str,
-    anomalies: list[dict[str, Any]],
+    anomalies: list[EnrichedAnomaly],
     history: list[dict[str, str]],
 ) -> str:
     """Build a context-rich prompt for the LLM."""
@@ -63,12 +66,18 @@ def build_chat_context(
 async def call_model(prompt: str) -> tuple[str, str]:
     """Call the LLM endpoint. Returns (reply_text, source).
 
+    `source` is one of the fixed ModelSource values, or a dynamic
+    ModelSource.http_error(code) string (e.g. "http-404") for HTTP errors —
+    see models.py. Typed as plain `str` here (rather than ModelSource) since
+    it's a mix of both; callers should still compare against ModelSource
+    members (e.g. `source == ModelSource.LIVE`) rather than string literals.
+
     NOTE: Minimal implementation sufficient for V1 (single vLLM endpoint).
     Consider replacing with litellm/llama-index if we need streaming,
     multi-model fallback, or token management.
     """
     if not MODEL_API_URL:
-        return "", "disabled"
+        return "", ModelSource.DISABLED
     payload = {
         "model": MODEL_NAME,
         "prompt": prompt,
@@ -80,24 +89,24 @@ async def call_model(prompt: str) -> tuple[str, str]:
             resp = await client.post(MODEL_API_URL, json=payload)
         if resp.status_code != 200:
             logger.warning("LLM returned HTTP %d from %s", resp.status_code, MODEL_API_URL)
-            return "", f"http-{resp.status_code}"
+            return "", ModelSource.http_error(resp.status_code)
         data = resp.json()
         choices = data.get("choices", [])
         if choices:
             text = (choices[0].get("text") or choices[0].get("message", {}).get("content") or "").strip()
             if text:
                 logger.debug("LLM replied with %d chars", len(text))
-                return text, "live"
-        return "", "empty"
+                return text, ModelSource.LIVE
+        return "", ModelSource.EMPTY
     except Exception:
         logger.warning("LLM unreachable at %s", MODEL_API_URL, exc_info=True)
-        return "", "unreachable"
+        return "", ModelSource.UNREACHABLE
 
 
 def format_chat_reply(
     user_message: str,
     raw_reply: str,
-    anomalies: list[dict[str, Any]],
+    anomalies: list[EnrichedAnomaly],
 ) -> str:
     """Format LLM output into a structured reply, or generate a deterministic fallback."""
     if not anomalies:
@@ -107,11 +116,12 @@ def format_chat_reply(
     else:
         latest = anomalies[0]
         cells_line = (
-            f"- Latest anomaly: Cell {latest.get('cell_id')} ({latest.get('band')}) "
-            f"[{latest.get('anomaly_type')}] — {latest.get('anomaly')}"
+            f"- Latest anomaly: Cell {latest.cell_id} ({latest.band}) "
+            f"[{latest.anomaly_type}] — {latest.anomaly}"
         )
-        root_cause = latest.get("root_cause", "n/a")
-        recommended_fix = latest.get("recommended_fix", "n/a")
+        # See _format_anomalies: root_cause/recommended_fix can be present-but-empty.
+        root_cause = latest.root_cause or "n/a"
+        recommended_fix = latest.recommended_fix or "n/a"
 
     if raw_reply:
         model_insight = raw_reply.strip()

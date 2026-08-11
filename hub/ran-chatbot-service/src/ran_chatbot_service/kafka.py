@@ -6,16 +6,17 @@ ran-rca-service publishes to the ran-anomalies-enriched Kafka topic.
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any
+
+from pydantic import ValidationError
 
 from .config import ENRICHED_ANOMALIES_MAX_MESSAGES, ENRICHED_ANOMALIES_TOPIC, KAFKA_BOOTSTRAP
+from .models import EnrichedAnomaly
 
 logger = logging.getLogger(__name__)
 
 
-def fetch_recent_anomalies() -> tuple[list[dict[str, Any]], bool]:
+def fetch_recent_anomalies() -> tuple[list[EnrichedAnomaly], bool]:
     """Read recent enriched RAN anomalies from Kafka using seek-to-end.
 
     Mirrors hub/chatbot-service/src/chatbot_service/kafka.py's fetch_recent_audits(),
@@ -28,7 +29,7 @@ def fetch_recent_anomalies() -> tuple[list[dict[str, Any]], bool]:
     """
     from kafka import KafkaConsumer
 
-    anomalies: list[dict[str, Any]] = []
+    anomalies: list[EnrichedAnomaly] = []
     try:
         consumer = KafkaConsumer(
             ENRICHED_ANOMALIES_TOPIC,
@@ -57,10 +58,14 @@ def fetch_recent_anomalies() -> tuple[list[dict[str, Any]], bool]:
             consumer.seek(tp, start_offset)
 
         for msg in consumer:
+            # model_validate_json wraps both malformed JSON and schema mismatches
+            # (missing/misnamed/mistyped fields) in the same ValidationError, so a
+            # renamed field upstream is caught here instead of surfacing as a silent
+            # None deep in the chat reply.
             try:
-                anomalies.append(json.loads(msg.value))
-            except Exception:
-                logger.debug("Skipping malformed enriched anomaly at offset %s", msg.offset)
+                anomalies.append(EnrichedAnomaly.model_validate_json(msg.value))
+            except ValidationError:
+                logger.warning("Skipping enriched anomaly that failed schema validation at offset %s", msg.offset)
                 continue
             if len(anomalies) >= ENRICHED_ANOMALIES_MAX_MESSAGES:
                 break
