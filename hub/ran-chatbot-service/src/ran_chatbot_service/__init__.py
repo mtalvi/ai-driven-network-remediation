@@ -126,6 +126,25 @@ async def ready(request: Request):
     return {"status": "ready", "checks": checks}
 
 
+@app.get("/api/anomalies")
+def anomalies(request: Request) -> dict:
+    """Recently detected RAN anomalies, newest first.
+
+    Reads the same in-memory buffer /api/chat uses for LLM context — an
+    instant operation, no Kafka I/O on the request path.
+    """
+    # The buffer is in ascending Kafka offset order (oldest first, see kafka.py),
+    # so reversing it puts the newest anomaly first for display.
+    recent = list(reversed(request.app.state.recent_anomalies))
+    kafka_ok = request.app.state.kafka_consumer.is_connected
+
+    return {
+        "_deps": build_deps({"kafka": kafka_ok}),
+        "count": len(recent),
+        "anomalies": [a.model_dump() for a in recent],
+    }
+
+
 @app.post("/api/chat")
 async def chat(req: ChatRequest, request: Request) -> dict:
     msg = req.message.strip()

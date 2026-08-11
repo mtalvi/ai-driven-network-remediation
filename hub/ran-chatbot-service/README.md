@@ -2,7 +2,18 @@
 
 Thin conversational entrypoint (FastAPI BFF) for the Telco O-RAN anomaly detection and root
 cause analysis use case. Exposes `POST /api/chat` so operators can ask about recently detected
-RAN cell anomalies, their likely root cause, and the recommended fix, in natural language.
+RAN cell anomalies, their likely root cause, and the recommended fix, in natural language. Also
+exposes `GET /api/anomalies` so a UI can render the current anomaly list directly, without going
+through chat.
+
+## Endpoints
+
+| Path | Method | Purpose |
+|---|---|---|
+| `/health` | GET | Liveness probe |
+| `/ready` | GET | Readiness (Kafka + LLM dependency status, always returns 200) |
+| `/api/chat` | POST | Conversational reply grounded in recently detected anomalies |
+| `/api/anomalies` | GET | Recent enriched anomalies (in-memory buffer), newest first |
 
 This service is a **thin channel layer**: it does not detect anomalies or perform root cause
 analysis itself. That domain logic lives in [`ran-anomaly-detector`](../ran-anomaly-detector)
@@ -27,9 +38,9 @@ started at app startup (see the `lifespan` in
 `ENRICHED_ANOMALIES_TOPIC` (`ran-anomalies-enriched` by default, see
 [`config.py`](src/ran_chatbot_service/config.py)) and continuously fills an in-memory buffer
 (`deque(maxlen=ENRICHED_ANOMALIES_MAX_MESSAGES)`) — the same pattern already used by
-[`ran-anomaly-detector`](../ran-anomaly-detector)'s `MetricsConsumer`. `POST /api/chat` just reads
-that buffer directly: no per-request Kafka I/O, unlike the older per-request
-`fetch_recent_audits()`-style approach `hub/chatbot-service` uses. On connect (and every
+[`ran-anomaly-detector`](../ran-anomaly-detector)'s `MetricsConsumer`. Both `POST /api/chat` and
+`GET /api/anomalies` just read that buffer directly: no per-request Kafka I/O, unlike the older
+per-request `fetch_recent_audits()`-style approach `hub/chatbot-service` uses. On connect (and every
 reconnect), it seeks each partition back a bounded window and drains it so the buffer has recent
 history immediately, rather than only filling in as new anomalies trickle in. It intentionally
 does **not** use a Kafka consumer group — the topic has multiple partitions, and a shared group

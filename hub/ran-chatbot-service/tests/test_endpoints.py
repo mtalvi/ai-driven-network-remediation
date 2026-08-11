@@ -46,6 +46,49 @@ def test_ready_kafka_unreachable(mock_probe, client):
     assert data["checks"]["kafka"] is False
 
 
+def test_anomalies_empty_buffer(client):
+    resp = client.get("/api/anomalies")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] == 0
+    assert data["anomalies"] == []
+    assert "_deps" in data
+
+
+def test_anomalies_returns_most_recent_first(client, sample_anomaly):
+    oldest = sample_anomaly.model_copy(update={"cell_id": 1})
+    newest = sample_anomaly.model_copy(update={"cell_id": 2})
+    client.app.state.recent_anomalies.append(oldest)
+    client.app.state.recent_anomalies.append(newest)
+
+    resp = client.get("/api/anomalies")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] == 2
+    assert [a["cell_id"] for a in data["anomalies"]] == [2, 1]
+
+
+def test_anomalies_includes_root_cause_and_recommended_fix(client, sample_anomaly):
+    client.app.state.recent_anomalies.append(sample_anomaly)
+
+    resp = client.get("/api/anomalies")
+    data = resp.json()
+    assert data["anomalies"][0]["root_cause"] == sample_anomaly.root_cause
+    assert data["anomalies"][0]["recommended_fix"] == sample_anomaly.recommended_fix
+
+
+def test_anomalies_deps_ok_when_kafka_connected(client):
+    client.app.state.kafka_consumer.is_connected = True
+    resp = client.get("/api/anomalies")
+    assert resp.json()["_deps"] == {"status": "ok"}
+
+
+def test_anomalies_deps_degraded_when_kafka_down(client):
+    client.app.state.kafka_consumer.is_connected = False
+    resp = client.get("/api/anomalies")
+    assert resp.json()["_deps"] == {"status": "degraded", "unavailable": ["kafka"]}
+
+
 @patch("ran_chatbot_service.call_model", new_callable=AsyncMock)
 def test_chat(mock_model, client, sample_anomalies):
     mock_model.return_value = ("Cell 42 has weak signal due to distance from the antenna.", "live")

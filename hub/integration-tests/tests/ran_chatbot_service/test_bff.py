@@ -3,11 +3,11 @@
 These run against a deployed ran-chatbot-service (via port-forward or direct URL).
 Set RAN_CHATBOT_SERVICE_URL env var to override the default http://localhost:8008.
 
-Unlike hub/chatbot-service's BFF, this service has no /api/summary, /api/integrations,
-or /api/demo/trigger endpoints — it is a thin channel layer with only /health, /ready,
-and /api/chat, backed by a background Kafka consumer (see hub/ran-chatbot-service's
-README) rather than per-request calls, so these tests don't need to trigger or wait
-for any Kafka event themselves.
+Unlike hub/chatbot-service's BFF, this service has no /api/summary or
+/api/demo/trigger endpoints — it is a thin channel layer with /health, /ready,
+/api/chat, and /api/anomalies, backed by a background Kafka consumer (see
+hub/ran-chatbot-service's README) rather than per-request calls, so these tests
+don't need to trigger or wait for any Kafka event themselves.
 """
 
 
@@ -63,6 +63,26 @@ def test_chat_empty_message(ran_chatbot_client):
     data = response.json()
     assert data["reply"] == "Please enter a question."
     assert "session_id" in data
+
+
+def test_anomalies(ran_chatbot_client):
+    """Anomalies endpoint returns the current in-memory buffer (possibly empty if
+    nothing has been detected/enriched yet), newest first."""
+    response = ran_chatbot_client.get("/api/anomalies")
+    assert response.status_code == 200
+    data = response.json()
+    assert "count" in data
+    assert "anomalies" in data
+    assert data["count"] == len(data["anomalies"])
+    assert "_deps" in data
+    assert data["_deps"]["status"] in {"ok", "degraded"}
+    for anomaly in data["anomalies"]:
+        assert "cell_id" in anomaly
+        assert "band" in anomaly
+        assert "anomaly_type" in anomaly
+        assert "anomaly" in anomaly
+        assert "root_cause" in anomaly
+        assert "recommended_fix" in anomaly
 
 
 def test_chat_preserves_session_history(ran_chatbot_client):
