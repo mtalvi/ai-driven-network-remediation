@@ -2,19 +2,6 @@
 
 from unittest.mock import AsyncMock, patch
 
-from ran_chatbot_service.models import EnrichedAnomaly
-
-_SAMPLE_ANOMALIES = [
-    EnrichedAnomaly(
-        cell_id=42,
-        band="Band 29",
-        anomaly_type="LowRsrp",
-        anomaly="Low RSRP: -125.0 dBm < -110.0 dBm",
-        root_cause="Poor radio conditions.",
-        recommended_fix="Section 4.2 — Antenna Tilt Adjustment",
-    )
-]
-
 
 def test_health(client):
     resp = client.get("/health")
@@ -58,9 +45,9 @@ def test_ready_kafka_unreachable(mock_probe, client):
 
 @patch("ran_chatbot_service.fetch_recent_anomalies")
 @patch("ran_chatbot_service.call_model", new_callable=AsyncMock)
-def test_chat(mock_model, mock_fetch, client):
+def test_chat(mock_model, mock_fetch, client, sample_anomalies):
     mock_model.return_value = ("Cell 42 has weak signal due to distance from the antenna.", "live")
-    mock_fetch.return_value = (_SAMPLE_ANOMALIES, True)
+    mock_fetch.return_value = (sample_anomalies, True)
 
     resp = client.post("/api/chat", json={"message": "What's wrong with cell 42?"})
     assert resp.status_code == 200
@@ -75,9 +62,9 @@ def test_chat(mock_model, mock_fetch, client):
 
 @patch("ran_chatbot_service.fetch_recent_anomalies")
 @patch("ran_chatbot_service.call_model", new_callable=AsyncMock)
-def test_chat_model_unavailable(mock_model, mock_fetch, client):
+def test_chat_model_unavailable(mock_model, mock_fetch, client, sample_anomalies):
     mock_model.return_value = ("", "unreachable")
-    mock_fetch.return_value = (_SAMPLE_ANOMALIES, True)
+    mock_fetch.return_value = (sample_anomalies, True)
 
     resp = client.post("/api/chat", json={"message": "Status?"})
     assert resp.status_code == 200
@@ -89,11 +76,11 @@ def test_chat_model_unavailable(mock_model, mock_fetch, client):
 
 @patch("ran_chatbot_service.fetch_recent_anomalies")
 @patch("ran_chatbot_service.call_model", new_callable=AsyncMock)
-def test_chat_model_http_error_reported_as_degraded(mock_model, mock_fetch, client):
+def test_chat_model_http_error_reported_as_degraded(mock_model, mock_fetch, client, sample_anomalies):
     """Regression test: an HTTP error from the LLM (e.g. a 404 for an unregistered
     model) must be reported as degraded, not silently treated as healthy."""
     mock_model.return_value = ("", "http-404")
-    mock_fetch.return_value = (_SAMPLE_ANOMALIES, True)
+    mock_fetch.return_value = (sample_anomalies, True)
 
     resp = client.post("/api/chat", json={"message": "Status?"})
     assert resp.status_code == 200
@@ -124,9 +111,9 @@ def test_chat_empty_message(client):
 
 @patch("ran_chatbot_service.fetch_recent_anomalies")
 @patch("ran_chatbot_service.call_model", new_callable=AsyncMock)
-def test_chat_preserves_session_history(mock_model, mock_fetch, client):
+def test_chat_preserves_session_history(mock_model, mock_fetch, client, sample_anomalies):
     mock_model.return_value = ("ok", "live")
-    mock_fetch.return_value = (_SAMPLE_ANOMALIES, True)
+    mock_fetch.return_value = (sample_anomalies, True)
     session_id = "test-session-1"
 
     first = client.post("/api/chat", json={"message": "hello", "session_id": session_id})

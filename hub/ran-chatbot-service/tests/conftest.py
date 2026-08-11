@@ -1,8 +1,34 @@
 import pytest
 from fastapi.testclient import TestClient
 from ran_chatbot_service import app
+from ran_chatbot_service.models import EnrichedAnomaly
+
+SAMPLE_ANOMALY_DICT = {
+    "cell_id": 42,
+    "band": "Band 29",
+    "anomaly_type": "LowRsrp",
+    "anomaly": "Low RSRP: -125.0 dBm < -110.0 dBm",
+    "root_cause": "Poor radio conditions.",
+    "recommended_fix": "Section 4.2 — Antenna Tilt Adjustment",
+}
 
 
 @pytest.fixture()
 def client():
     return TestClient(app)
+
+
+@pytest.fixture()
+def sample_anomaly_dict() -> dict:
+    """The JSON-serializable form, for building fake Kafka message payloads."""
+    return dict(SAMPLE_ANOMALY_DICT)
+
+
+@pytest.fixture()
+def sample_anomaly(sample_anomaly_dict) -> EnrichedAnomaly:
+    return EnrichedAnomaly(**sample_anomaly_dict)
+
+
+@pytest.fixture()
+def sample_anomalies(sample_anomaly) -> list[EnrichedAnomaly]:
+    return [sample_anomaly]

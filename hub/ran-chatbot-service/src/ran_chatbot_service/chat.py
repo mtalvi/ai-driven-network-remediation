@@ -138,9 +138,5 @@ def format_chat_reply(
         "Recommended Fix:\n"
         f"- {recommended_fix}\n\n"
         "Model Output:\n"
-        f"- {model_insight}\n\n"
-        "Next Action:\n"
-        "1. Review the recommended fix against current field conditions.\n"
-        "2. Dispatch a technician or trigger remote reconfiguration if applicable.\n"
-        "3. Confirm KPI recovery after the fix is applied."
+        f"- {model_insight}"
     )
