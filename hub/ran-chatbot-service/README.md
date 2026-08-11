@@ -12,7 +12,10 @@ enriched anomaly data and formats the LLM's reply.
 
 This is an independent workflow/deployment from `hub/chatbot-service` (the network remediation
 NOC chatbot): different domain, different Kafka topics, different persona/prompt, and it can be
-enabled/disabled separately in Helm.
+enabled/disabled separately in Helm. The two services do share one thing: a handful of
+domain-free infrastructure helpers (`utc_now`, `normalize_session_id`, `build_deps`, `probe_http`)
+factored out into [`hub/shared-utils`](../shared-utils/), a local package depended on via a `uv`
+path source, so fixes to that plumbing aren't duplicated across both services.
 
 ## Where the anomaly data comes from
 
@@ -54,3 +57,8 @@ cd hub/ran-chatbot-service
 uv sync --group dev
 uv run pytest
 ```
+
+`uv sync` resolves `shared-utils` from the sibling [`hub/shared-utils`](../shared-utils/)
+directory via a `uv` path source, so it must exist alongside this one (already true within this
+repo checkout). For the same reason, the container image's build context is `hub/`, not this
+directory — see `build-ran-chatbot-image` in the root `Makefile`.
