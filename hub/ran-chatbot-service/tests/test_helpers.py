@@ -1,7 +1,8 @@
-"""Unit tests for helper functions: dependency envelope, chat formatting.
+"""Unit tests for helper functions: chat formatting.
 
-Kafka consumption itself (AnomaliesConsumer) is tested separately in
-test_kafka_consumer.py.
+build_deps() and normalize_session_id() are tested in hub/shared-utils/tests
+instead, since that's where they now live. Kafka consumption itself
+(AnomaliesConsumer) is tested separately in test_kafka_consumer.py.
 """
 
 import httpx
@@ -10,34 +11,6 @@ import respx
 from ran_chatbot_service.chat import build_chat_context, call_model, format_chat_reply
 from ran_chatbot_service.config import MODEL_API_URL
 from ran_chatbot_service.models import ModelSource
-from ran_chatbot_service.utils import build_deps, normalize_session_id
-
-
-class TestBuildDeps:
-    def test_all_ok(self):
-        assert build_deps({"kafka": True, "llm": True}) == {"status": "ok"}
-
-    def test_empty_checks(self):
-        assert build_deps({}) == {"status": "ok"}
-
-    def test_single_failure(self):
-        result = build_deps({"kafka": True, "llm": False})
-        assert result == {"status": "degraded", "unavailable": ["llm"]}
-
-    def test_multiple_failures_sorted(self):
-        result = build_deps({"llm": False, "kafka": False})
-        assert result == {"status": "degraded", "unavailable": ["kafka", "llm"]}
-
-
-class TestNormalizeSessionId:
-    def test_returns_provided_id(self):
-        assert normalize_session_id("session-123") == "session-123"
-
-    def test_generates_id_when_missing(self):
-        assert normalize_session_id(None)
-
-    def test_generates_id_when_blank(self):
-        assert normalize_session_id("   ")
 
 
 class TestBuildChatContext:
