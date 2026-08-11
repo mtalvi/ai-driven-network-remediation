@@ -1,3 +1,6 @@
+# Build context for this image must be `hub/` (not this directory), since the
+# project depends on the sibling `shared-utils` package via a local uv path source.
+# See: `make build-chatbot-image` in the root Makefile.
 FROM python:3.13-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -7,12 +10,16 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
+# shared-utils is copied one level up so the "../shared-utils" path source in
+# chatbot-service/pyproject.toml resolves correctly from /app.
+COPY shared-utils/ /shared-utils/
+
+COPY chatbot-service/pyproject.toml chatbot-service/uv.lock ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project --no-editable --no-dev
 
-COPY . /app
+COPY chatbot-service/ /app/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-editable --no-dev

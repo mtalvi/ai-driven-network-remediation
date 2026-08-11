@@ -8,11 +8,15 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "shared-utils",
     "fastapi>=0.115",
     "uvicorn>=0.34",
     "httpx>=0.28",
     "kafka-python-ng>=2.2",
 ]
+
+[tool.uv.sources]
+shared-utils = { path = "../shared-utils" }
 
 [dependency-groups]
 dev = [
