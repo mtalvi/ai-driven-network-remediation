@@ -1,0 +1,27 @@
+[project]
+name = "shared-utils"
+version = "0.1.0"
+description = "Domain-free infrastructure helpers (dependency envelope, session id normalization, UTC timestamps, HTTP reachability probe) shared across the chatbot BFF services"
+readme = "README.md"
+authors = [
+    { name = "rh-ai-quickstart" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "respx>=0.22",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.13,<0.10.0"]
+build-backend = "uv_build"
