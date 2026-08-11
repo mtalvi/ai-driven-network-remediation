@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 import time
 from typing import Any
 
@@ -23,6 +24,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from shared_utils import build_deps, normalize_session_id, probe_http, utc_now
 
 from .chat import build_chat_context, call_model, format_chat_reply
 from .config import (
@@ -31,12 +33,15 @@ from .config import (
     DEMO_TOPIC,
     INTEGRATION_TARGETS,
     INTEGRATIONS_CACHE_TTL,
+    KAFKA_BOOTSTRAP,
     MODEL_NAME,
+    SERVICENOW_URL,
+    SSL_VERIFY,
 )
 from .kafka import build_demo_event, fetch_recent_audits, publish_demo_event
-from .probes import fetch_servicenow_incident_count, probe_http
+from .probes import fetch_servicenow_incident_count
 from .slo import build_incident_movie, compute_slo_metrics, normalize_incident_record
-from .utils import build_deps, get_mcp_items, normalize_session_id, utc_now
+from .utils import get_mcp_items
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +82,9 @@ class DemoTriggerRequest(BaseModel):
 
 async def _build_integrations() -> dict[str, Any]:
     """Probe all services and compute SLO/incident data."""
-    probes = await asyncio.gather(*(probe_http(t["probe_url"]) for t in INTEGRATION_TARGETS))
+    probes = await asyncio.gather(
+        *(probe_http(t["probe_url"], verify=SSL_VERIFY) for t in INTEGRATION_TARGETS)
+    )
 
     integrations: list[dict[str, Any]] = []
     up_count = 0
@@ -135,6 +142,17 @@ def health() -> dict:
     return {"status": "ok", "service": "noc-chatbot-bff", "version": APP_VERSION}
 
 
+def _kafka_reachable(bootstrap: str, timeout: float) -> bool:
+    """Synchronous socket-based reachability check, meant to be run via
+    asyncio.to_thread() so it doesn't block the event loop while it runs."""
+    try:
+        host, port = bootstrap.split(",")[0].rsplit(":", 1)
+        socket.create_connection((host, int(port)), timeout=timeout).close()
+        return True
+    except OSError:
+        return False
+
+
 @app.get("/ready")
 async def ready():
     """Readiness probe — reports dependency status but always passes.
@@ -143,21 +161,11 @@ async def ready():
     (empty timelines, fallback chat, 502 on demo trigger), so it can
     always serve useful traffic. Dependency status is informational.
     """
-    import socket
-
-    from .config import KAFKA_BOOTSTRAP, SERVICENOW_URL
-
     checks: dict[str, bool] = {}
 
-    try:
-        host, port = KAFKA_BOOTSTRAP.split(",")[0].rsplit(":", 1)
-        sock = socket.create_connection((host, int(port)), timeout=2)
-        sock.close()
-        checks["kafka"] = True
-    except OSError:
-        checks["kafka"] = False
+    checks["kafka"] = await asyncio.to_thread(_kafka_reachable, KAFKA_BOOTSTRAP, 2)
 
-    sn_probe = await probe_http(SERVICENOW_URL, timeout=2.0)
+    sn_probe = await probe_http(SERVICENOW_URL, timeout=2.0, verify=SSL_VERIFY)
     checks["servicenow"] = sn_probe["reachable"]
 
     return {"status": "ready", "checks": checks}

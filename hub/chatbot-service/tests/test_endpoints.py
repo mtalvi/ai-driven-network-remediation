@@ -59,7 +59,7 @@ def test_integrations(mock_probe, mock_audits, client):
 @patch("chatbot_service.fetch_recent_audits")
 @patch("chatbot_service.probe_http", new_callable=AsyncMock)
 def test_integrations_with_down_service(mock_probe, mock_audits, client):
-    async def side_effect(url, timeout=4.0):
+    async def side_effect(url, timeout=4.0, verify=True):
         if "openshift" in url:
             return {"status": "down", "http_code": None, "reachable": False}
         return {"status": "up", "http_code": 200, "reachable": True}
