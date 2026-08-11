@@ -289,11 +289,13 @@ For comparison, here's what the equivalent roles are in Workflow 1 (already exis
 | Vendor doc RAG ingestion (`telco_oran_docs` vector store, done) | [`hub/ingestion-pipeline/`](../hub/ingestion-pipeline/) (extended, not a new service) |
 | Root cause analysis service (RAG + Granite LLM) | [`hub/ran-rca-service/`](../hub/ran-rca-service/), see [`docs/telco-oran-rca.md`](telco-oran-rca.md) |
 | Chatbot entrypoint (see [§10](#10-the-chatbot-entrypoint-new-talking-to-detected-anomalies)) | [`hub/ran-chatbot-service/`](../hub/ran-chatbot-service/) |
+| RAN webapp (see [§11](#11-the-ran-webapp-new-visualizing-and-chatting-with-detected-anomalies)) | [`hub/ran-frontend/`](../hub/ran-frontend/) |
 | New Kafka topic definitions | [`hub/helm/charts/kafka/values.yaml`](../hub/helm/charts/kafka/values.yaml) |
 | New Helm Deployment/Service (detector) | [`hub/helm/templates/ran-anomaly-detector.yaml`](../hub/helm/templates/ran-anomaly-detector.yaml) |
 | New Helm Deployment/Service (RCA) | [`hub/helm/templates/ran-rca-service.yaml`](../hub/helm/templates/ran-rca-service.yaml) |
 | New Helm Deployment/Service (chatbot) | [`hub/helm/templates/ran-chatbot-service.yaml`](../hub/helm/templates/ran-chatbot-service.yaml) |
-| New Helm values blocks | [`hub/helm/values.yaml`](../hub/helm/values.yaml) (`ranAnomalyDetector:`, `ranRcaService:`, and `ranChatbotService:` sections) |
+| New Helm Deployment/Service/Route (webapp) | [`hub/helm/templates/ran-frontend.yaml`](../hub/helm/templates/ran-frontend.yaml) |
+| New Helm values blocks | [`hub/helm/values.yaml`](../hub/helm/values.yaml) (`ranAnomalyDetector:`, `ranRcaService:`, `ranChatbotService:`, and `ranFrontend:` sections) |
 | Existing edge-infrastructure workflow | [`docs/architecture.md`](architecture.md), [`docs/graph-nodes.md`](graph-nodes.md) |
 
 Try it locally without any Kafka/OpenShift setup:
@@ -380,11 +382,91 @@ flowchart LR
     bff -->|"reply"| operator
 ```
 
-### 10.4 Out of scope for this entrypoint
+### 10.4 What was out of scope for this entrypoint (now built, see §11)
 
-No frontend/UI work is included here — a dedicated O-RAN web dashboard is a separate, later task.
-`ran-chatbot-service` is currently testable directly via its REST API (`POST /api/chat`), and has
-black-box integration test coverage in
+No frontend/UI work was included in this entrypoint's own task — a dedicated O-RAN web dashboard
+was scoped as a separate, later task. That dashboard is now built; see
+[§11](#11-the-ran-webapp-new-visualizing-and-chatting-with-detected-anomalies) below for
+`hub/ran-frontend`, which also motivated adding one new read-only endpoint here,
+`GET /api/anomalies` (see §11.2).
+
+`ran-chatbot-service` remains directly testable via its REST API (`POST /api/chat`,
+`GET /api/anomalies`), and has black-box integration test coverage in
 [`hub/integration-tests/tests/ran_chatbot_service/`](../hub/integration-tests/tests/ran_chatbot_service/)
 (run via `make integration-tests` against a deployed cluster, alongside `hub/chatbot-service`'s
 equivalent suite), on top of its own unit tests in `hub/ran-chatbot-service/tests/`.
+
+---
+
+## 11. The RAN webapp (new): visualizing and chatting with detected anomalies
+
+### 11.1 What it is
+
+`hub/ran-frontend` is a small React webapp — a live anomaly feed plus a chat panel — sitting on
+top of `ran-chatbot-service`. It follows the exact same convention as every other piece of this
+initiative: a fully **independent twin** of an existing NOC-workflow component, here
+`hub/frontend` (the NOC dashboard). Same stack (React 19 + Vite 6, no router, no UI framework,
+native `fetch`, nginx-unprivileged in production, relative `/api/*` calls proxied to its BFF),
+same overall shape, but a separate codebase, separate Helm Deployment/Service/Route, and its own
+`ranFrontend.enabled` toggle — it shares no runtime code path with `hub/frontend` or
+`hub/chatbot-service`. See [`hub/ran-frontend/README.md`](../hub/ran-frontend/README.md) for the
+full stack/structure writeup.
+
+Because `ran-chatbot-service` is much thinner than `hub/chatbot-service` (no
+`/api/summary`/`/api/integrations`/`/api/demo/trigger` equivalents), this webapp is
+correspondingly focused: a header metrics strip, a live anomaly list, and a chat panel — no
+integration matrix, SLO panel, business-impact panel, incident timeline, or demo triggers, since
+there's no matching data source for any of those in this workflow (yet).
+
+### 11.2 The new `GET /api/anomalies` endpoint
+
+The only backend change this webapp required: `ran-chatbot-service` already kept a live,
+in-memory buffer of enriched anomalies (`app.state.recent_anomalies`, filled by the background
+`AnomaliesConsumer` described in §10.2) purely to build LLM chat context — nothing exposed that
+buffer over HTTP directly. `GET /api/anomalies` exposes it read-only, newest first, with the same
+`_deps` envelope convention as `/api/chat`:
+
+```json
+{
+  "_deps": { "status": "ok" },
+  "count": 2,
+  "anomalies": [
+    {
+      "cell_id": 42,
+      "band": "Band 29",
+      "anomaly_type": "LowRsrp",
+      "anomaly": "Low RSRP: -125.0 dBm < -110.0 dBm",
+      "root_cause": "Low RSRP typically indicates poor radio conditions...",
+      "recommended_fix": "Refer to Baicells documentation Section 4.2, Page 15..."
+    }
+  ]
+}
+```
+
+No new Kafka consumption and no new dependency: it's purely a read of state that already existed,
+so `_deps` here only ever reflects `kafka` (no LLM call happens on this path).
+
+### 11.3 End-to-end flow
+
+```mermaid
+flowchart LR
+    detector["ran-anomaly-detector"] -->|"ran-anomalies"| rca["ran-rca-service"]
+    rca -->|"ran-anomalies-enriched"| consumer["kafka.py: AnomaliesConsumer"]
+    consumer --> buffer[("in-memory buffer\napp.state.recent_anomalies")]
+    browser["Operator's browser\n(ran-frontend SPA)"] -->|"GET /api/anomalies\n(10s poll)"| nginx["nginx (ran-frontend)"]
+    browser -->|"POST /api/chat"| nginx
+    nginx -->|"proxy_pass"| bff["ran-chatbot-service"]
+    bff -->|"list(buffer)"| buffer
+    bff -->|"reply / anomaly list"| nginx
+    nginx --> browser
+```
+
+### 11.4 Where to find things
+
+| What | Where |
+|---|---|
+| RAN webapp source | [`hub/ran-frontend/`](../hub/ran-frontend/) |
+| RAN webapp docs | [`hub/ran-frontend/README.md`](../hub/ran-frontend/README.md) |
+| New `GET /api/anomalies` endpoint | [`hub/ran-chatbot-service/src/ran_chatbot_service/__init__.py`](../hub/ran-chatbot-service/src/ran_chatbot_service/__init__.py) |
+| New Helm Deployment/Service/Route (webapp) | [`hub/helm/templates/ran-frontend.yaml`](../hub/helm/templates/ran-frontend.yaml) |
+| New Helm values block | [`hub/helm/values.yaml`](../hub/helm/values.yaml) (`ranFrontend:`) |
