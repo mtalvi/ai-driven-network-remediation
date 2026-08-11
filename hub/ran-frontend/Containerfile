@@ -1,0 +1,17 @@
+ARG BUILDPLATFORM
+
+# Build static assets on the native build platform to avoid esbuild crashes
+# under amd64 emulation on Apple Silicon. The generated dist/ files are
+# architecture-agnostic and can be copied into the target runtime image.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS builder
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM docker.io/nginxinc/nginx-unprivileged:1.27-alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 8080
+CMD ["nginx", "-g", "daemon off;"]
