@@ -42,6 +42,7 @@ AGENT_IMG          := $(REGISTRY)/noc-agent-service:$(VERSION)
 RAN_ANOMALY_IMG    := $(REGISTRY)/noc-ran-anomaly-detector:$(VERSION)
 RAN_RCA_IMG        := $(REGISTRY)/noc-ran-rca-service:$(VERSION)
 RAN_CHATBOT_IMG    := $(REGISTRY)/noc-ran-chatbot-service:$(VERSION)
+RAN_FRONTEND_IMG   := $(REGISTRY)/noc-ran-frontend:$(VERSION)
 FRONTEND_IMG       := $(REGISTRY)/noc-frontend:$(VERSION)
 MCP_OPENSHIFT_IMG  := $(REGISTRY)/noc-mcp-openshift:$(VERSION)
 MCP_LOKISTACK_IMG  := $(REGISTRY)/noc-mcp-lokistack:$(VERSION)
@@ -149,6 +150,7 @@ CORE_BUILD_PUSH_IMAGES := \
 	$(RAN_ANOMALY_IMG) \
 	$(RAN_RCA_IMG) \
 	$(RAN_CHATBOT_IMG) \
+	$(RAN_FRONTEND_IMG) \
 	$(FRONTEND_IMG) \
 	$(MCP_OPENSHIFT_IMG) \
 	$(MCP_LOKISTACK_IMG) \
@@ -294,6 +296,7 @@ helm_all_args = \
 	--set image.ranAnomalyDetector=noc-ran-anomaly-detector \
 	--set image.ranRcaService=noc-ran-rca-service \
 	--set image.ranChatbotService=noc-ran-chatbot-service \
+	--set image.ranFrontend=noc-ran-frontend \
 	--set image.frontend=noc-frontend \
 	--set image.tag=$(VERSION) \
 	--set ranAnomalyDetector.enabled=$(ENABLE_RAN_ANOMALY) \
@@ -589,7 +592,7 @@ edge-rbac-teardown:
 # ══════════════════════════════════════════════════════════════════════
 
 .PHONY: build-all-images
-build-all-images: build-chatbot-image build-agent-image build-ran-anomaly-image build-ran-rca-image build-ran-chatbot-image build-frontend-image build-mcp-images
+build-all-images: build-chatbot-image build-agent-image build-ran-anomaly-image build-ran-rca-image build-ran-chatbot-image build-ran-frontend-image build-frontend-image build-mcp-images
 
 .PHONY: build-chatbot-image
 build-chatbot-image:
@@ -611,6 +614,10 @@ build-ran-rca-image:
 .PHONY: build-ran-chatbot-image
 build-ran-chatbot-image:
 	$(CONTAINER_TOOL) build -t $(RAN_CHATBOT_IMG) --platform=$(ARCH) -f $(RAN_CHATBOT_CONTAINERFILE) $(RAN_CHATBOT_CONTEXT)
+
+.PHONY: build-ran-frontend-image
+build-ran-frontend-image:
+	$(CONTAINER_TOOL) build -t $(RAN_FRONTEND_IMG) --platform=$(ARCH) -f hub/ran-frontend/Containerfile hub/ran-frontend
 
 .PHONY: build-frontend-image
 build-frontend-image:
