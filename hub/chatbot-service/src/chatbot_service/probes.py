@@ -1,8 +1,4 @@
-"""HTTP health probes for ServiceNow.
-
-The generic probe_http() helper (used for MCP server reachability too) now
-lives in the shared `shared` package instead — see hub/shared.
-"""
+"""ServiceNow incident query."""
 
 from __future__ import annotations
 

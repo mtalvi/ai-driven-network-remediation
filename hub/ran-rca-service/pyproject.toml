@@ -7,7 +7,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "shared",
+    "shared[kafka,rag]",
     "click>=8.1.0",
     "fastapi>=0.115",
     "kafka-python-ng>=2.2",

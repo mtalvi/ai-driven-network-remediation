@@ -24,7 +24,7 @@ dependencies = [
     { name = "loguru" },
     { name = "pydantic" },
     { name = "pyyaml" },
-    { name = "shared" },
+    { name = "shared", extra = ["rag"] },
     { name = "slack-sdk" },
     { name = "uvicorn" },
 ]
@@ -49,7 +49,7 @@ requires-dist = [
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "shared", directory = "../shared" },
+    { name = "shared", extras = ["rag"], directory = "../shared" },
     { name = "slack-sdk", specifier = ">=3.33" },
     { name = "uvicorn", specifier = ">=0.34" },
 ]
@@ -1261,7 +1261,10 @@ version = "0.1.0"
 source = { directory = "../shared" }
 dependencies = [
     { name = "httpx" },
-    { name = "kafka-python-ng" },
+]
+
+[package.optional-dependencies]
+rag = [
     { name = "llama-stack-client" },
     { name = "loguru" },
 ]
@@ -1269,13 +1272,18 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28" },
-    { name = "kafka-python-ng", specifier = ">=2.2" },
-    { name = "llama-stack-client", specifier = ">=0.6.1,<0.7" },
-    { name = "loguru", specifier = ">=0.7.0" },
+    { name = "kafka-python-ng", marker = "extra == 'kafka'", specifier = ">=2.2" },
+    { name = "llama-stack-client", marker = "extra == 'rag'", specifier = ">=0.6.1,<0.7" },
+    { name = "loguru", marker = "extra == 'kafka'", specifier = ">=0.7.0" },
+    { name = "loguru", marker = "extra == 'rag'", specifier = ">=0.7.0" },
 ]
+provides-extras = ["kafka", "rag"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "kafka-python-ng", specifier = ">=2.2" },
+    { name = "llama-stack-client", specifier = ">=0.6.1,<0.7" },
+    { name = "loguru", specifier = ">=0.7.0" },
     { name = "pytest", specifier = ">=7.4.0" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=6.0" },

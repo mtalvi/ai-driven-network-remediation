@@ -695,13 +695,23 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+]
+
+[package.optional-dependencies]
+kafka = [
     { name = "kafka-python-ng" },
+    { name = "loguru" },
+]
+rag = [
     { name = "llama-stack-client" },
     { name = "loguru" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "kafka-python-ng" },
+    { name = "llama-stack-client" },
+    { name = "loguru" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -711,13 +721,18 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28" },
-    { name = "kafka-python-ng", specifier = ">=2.2" },
-    { name = "llama-stack-client", specifier = ">=0.6.1,<0.7" },
-    { name = "loguru", specifier = ">=0.7.0" },
+    { name = "kafka-python-ng", marker = "extra == 'kafka'", specifier = ">=2.2" },
+    { name = "llama-stack-client", marker = "extra == 'rag'", specifier = ">=0.6.1,<0.7" },
+    { name = "loguru", marker = "extra == 'kafka'", specifier = ">=0.7.0" },
+    { name = "loguru", marker = "extra == 'rag'", specifier = ">=0.7.0" },
 ]
+provides-extras = ["kafka", "rag"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "kafka-python-ng", specifier = ">=2.2" },
+    { name = "llama-stack-client", specifier = ">=0.6.1,<0.7" },
+    { name = "loguru", specifier = ">=0.7.0" },
     { name = "pytest", specifier = ">=7.4.0" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=6.0" },

@@ -1,8 +1,4 @@
-"""Service-specific utility functions.
-
-Domain-free infrastructure helpers (utc_now, normalize_session_id, build_deps)
-live in the shared `shared` package instead — see hub/shared.
-"""
+"""Service-specific helpers."""
 
 from __future__ import annotations
 

@@ -9,10 +9,11 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "httpx>=0.28",
-    "kafka-python-ng>=2.2",
-    "llama-stack-client>=0.6.1,<0.7",
-    "loguru>=0.7.0",
 ]
+
+[project.optional-dependencies]
+kafka = ["kafka-python-ng>=2.2", "loguru>=0.7.0"]
+rag = ["llama-stack-client>=0.6.1,<0.7", "loguru>=0.7.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -21,6 +22,9 @@ addopts = "--cov --cov-report=term-missing"
 
 [dependency-groups]
 dev = [
+    "kafka-python-ng>=2.2",
+    "llama-stack-client>=0.6.1,<0.7",
+    "loguru>=0.7.0",
     "pytest>=7.4.0",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=6.0",
