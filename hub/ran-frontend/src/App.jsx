@@ -3,6 +3,7 @@ import { usePolling } from "./hooks/usePolling";
 import { DegradedBanner } from "./components/DegradedBanner";
 import { HeaderMetrics } from "./components/HeaderMetrics";
 import { AnomalyTable } from "./components/AnomalyTable";
+import { DemoTrigger } from "./components/DemoTrigger";
 import { ChatPanel } from "./components/ChatPanel";
 
 function getBaseUrl() {
@@ -18,12 +19,13 @@ function getBaseUrl() {
 
 export default function App() {
   const baseUrl = useMemo(getBaseUrl, []);
-  const { anomalies, count, deps, lastUpdated } = usePolling(baseUrl);
+  const { anomalies, count, deps, lastUpdated, speedUpPolling } = usePolling(baseUrl);
 
   return (
     <main className="page">
       <DegradedBanner deps={deps} />
       <HeaderMetrics anomalies={anomalies} count={count} deps={deps} lastUpdated={lastUpdated} />
+      <DemoTrigger baseUrl={baseUrl} onTriggered={speedUpPolling} />
       <AnomalyTable anomalies={anomalies} />
       <ChatPanel baseUrl={baseUrl} />
     </main>
