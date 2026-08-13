@@ -14,6 +14,10 @@ KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 ENRICHED_ANOMALIES_TOPIC = os.getenv("ENRICHED_ANOMALIES_TOPIC", "ran-anomalies-enriched")
 ENRICHED_ANOMALIES_MAX_MESSAGES = int(os.getenv("ENRICHED_ANOMALIES_MAX_MESSAGES", "50"))
 
+# Topic ran-anomaly-detector consumes RAN KPI readings from (see demo.py). Demo
+# trigger publishes directly here, the same real input topic real data uses.
+DEMO_METRICS_TOPIC = os.getenv("DEMO_METRICS_TOPIC", "ran-combined-metrics")
+
 # ── LLM ───────────────────────────────────────────────────────────
 MODEL_API_URL = os.getenv("MODEL_API_URL", "http://llamastack-service:8321/v1/completions")
 MODEL_NAME = os.getenv("MODEL_NAME", "granite-4-h-tiny")

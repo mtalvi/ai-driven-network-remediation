@@ -4,10 +4,13 @@ These run against a deployed ran-chatbot-service (via port-forward or direct URL
 Set RAN_CHATBOT_SERVICE_URL env var to override the default http://localhost:8008.
 
 Unlike hub/chatbot-service's BFF, this service has no /api/summary or
-/api/demo/trigger endpoints — it is a thin channel layer with /health, /ready,
-/api/chat, and /api/anomalies, backed by a background Kafka consumer (see
-hub/ran-chatbot-service's README) rather than per-request calls, so these tests
-don't need to trigger or wait for any Kafka event themselves.
+/api/integrations endpoints — it is a thin channel layer with /health, /ready,
+/api/chat, /api/anomalies, and /api/demo/trigger, backed by a background Kafka
+consumer (see hub/ran-chatbot-service's README) rather than per-request calls,
+so most of these tests don't need to trigger or wait for any Kafka event
+themselves. test_demo_trigger is the exception: it actually publishes a
+synthetic reading to ran-combined-metrics, the same way a real operator
+clicking the webapp's demo button would.
 """
 
 
@@ -83,6 +86,29 @@ def test_anomalies(ran_chatbot_client):
         assert "anomaly" in anomaly
         assert "root_cause" in anomaly
         assert "recommended_fix" in anomaly
+
+
+def test_demo_trigger(ran_chatbot_client):
+    """Demo trigger publishes a synthetic reading to ran-combined-metrics and
+    reports where to look for it (cell_id/band), the same real input topic
+    ran-anomaly-detector consumes from."""
+    response = ran_chatbot_client.post("/api/demo/trigger", json={"scenario": "low_signal"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "queued"
+    assert data["scenario"] == "low_signal"
+    assert data["cell_id"] == 9001
+    assert data["band"]
+    assert data["topic"] == "ran-combined-metrics"
+    assert isinstance(data["kafka_offset"], int)
+    assert "_deps" in data
+    assert data["_deps"]["status"] in {"ok", "degraded"}
+
+
+def test_demo_trigger_unknown_scenario_falls_back_to_default(ran_chatbot_client):
+    response = ran_chatbot_client.post("/api/demo/trigger", json={"scenario": "not-a-real-scenario"})
+    assert response.status_code == 200
+    assert response.json()["scenario"] == "low_signal"
 
 
 def test_chat_preserves_session_history(ran_chatbot_client):

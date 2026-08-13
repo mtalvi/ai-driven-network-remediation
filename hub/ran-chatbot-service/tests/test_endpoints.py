@@ -89,6 +89,52 @@ def test_anomalies_deps_degraded_when_kafka_down(client):
     assert resp.json()["_deps"] == {"status": "degraded", "unavailable": ["kafka"]}
 
 
+@patch("ran_chatbot_service.publish_demo_metrics")
+def test_demo_trigger_low_signal(mock_publish, client):
+    mock_publish.return_value = 7
+    client.app.state.kafka_consumer.is_connected = True
+
+    resp = client.post("/api/demo/trigger", json={"scenario": "low_signal"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["_deps"] == {"status": "ok"}
+    assert data["status"] == "queued"
+    assert data["scenario"] == "low_signal"
+    assert data["cell_id"] == 9001
+    assert data["band"] == "Band 71"
+    assert data["topic"] == "ran-combined-metrics"
+    assert data["kafka_offset"] == 7
+
+
+@patch("ran_chatbot_service.publish_demo_metrics")
+def test_demo_trigger_cell_outage(mock_publish, client):
+    mock_publish.return_value = 1
+    resp = client.post("/api/demo/trigger", json={"scenario": "cell_outage"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["scenario"] == "cell_outage"
+    assert data["cell_id"] == 9002
+
+
+@patch("ran_chatbot_service.publish_demo_metrics")
+def test_demo_trigger_defaults_to_low_signal(mock_publish, client):
+    mock_publish.return_value = 0
+    resp = client.post("/api/demo/trigger", json={})
+    assert resp.status_code == 200
+    assert resp.json()["scenario"] == "low_signal"
+
+
+@patch("ran_chatbot_service.publish_demo_metrics")
+def test_demo_trigger_kafka_failure_reported_as_502(mock_publish, client):
+    mock_publish.side_effect = Exception("Kafka unreachable")
+    resp = client.post("/api/demo/trigger", json={"scenario": "low_signal"})
+    assert resp.status_code == 502
+    data = resp.json()
+    assert data["status"] == "error"
+    assert data["scenario"] == "low_signal"
+    assert data["cell_id"] == 9001
+
+
 @patch("ran_chatbot_service.call_model", new_callable=AsyncMock)
 def test_chat(mock_model, client, sample_anomalies):
     mock_model.return_value = ("Cell 42 has weak signal due to distance from the antenna.", "live")

@@ -4,7 +4,8 @@ Thin conversational entrypoint (FastAPI BFF) for the Telco O-RAN anomaly detecti
 cause analysis use case. Exposes `POST /api/chat` so operators can ask about recently detected
 RAN cell anomalies, their likely root cause, and the recommended fix, in natural language. Also
 exposes `GET /api/anomalies` so a UI can render the current anomaly list directly, without going
-through chat.
+through chat, and `POST /api/demo/trigger` to inject a synthetic reading into the real pipeline
+for demos.
 
 ## Endpoints
 
@@ -14,6 +15,7 @@ through chat.
 | `/ready` | GET | Readiness (Kafka + LLM dependency status, always returns 200) |
 | `/api/chat` | POST | Conversational reply grounded in recently detected anomalies |
 | `/api/anomalies` | GET | Recent enriched anomalies (in-memory buffer), newest first |
+| `/api/demo/trigger` | POST | Publish a synthetic RAN KPI reading to `ran-combined-metrics` for demos |
 
 This service is a **thin channel layer**: it does not detect anomalies or perform root cause
 analysis itself. That domain logic lives in [`ran-anomaly-detector`](../ran-anomaly-detector)
@@ -62,6 +64,28 @@ this output contract (`contracts/ran-anomaly-enriched.schema.json`):
   "recommended_fix": "Refer to Baicells documentation Section 4.2, Page 15 — Antenna Tilt Adjustment"
 }
 ```
+
+## Demo trigger
+
+[`demo.py`](src/ran_chatbot_service/demo.py) builds a single-row CSV reading matching
+[`ran-anomaly-detector`](../ran-anomaly-detector)'s `csv_mapper.py` column format and publishes it
+straight to `DEMO_METRICS_TOPIC` (`ran-combined-metrics` by default) — the same real input topic
+real KPI data arrives on. This service never talks to `ran-anomaly-detector` directly: everything
+downstream (detection -> RCA -> this service's own `AnomaliesConsumer` buffer) is the already-
+running real pipeline, exactly like `hub/chatbot-service`'s `POST /api/demo/trigger` publishes
+straight to `system-alerts` rather than calling `agent-service`.
+
+Two scenarios, using reserved `cell_id`s (`9001`/`9002`) and `city: "Demo City"` so they're
+unmistakably synthetic in the UI:
+
+| Scenario | Fires | Notes |
+|---|---|---|
+| `low_signal` (default) | `LowRsrp` only | Clean single-anomaly demo (`rsrp=-125.0` dBm) |
+| `cell_outage` | `CellOutage` + `LowRsrp` + `SinrDegradation` | All three fire off one reading; each gets its own RCA pass, so expect them to appear over ~45-60s, not all at once |
+
+**Prerequisite:** `ran-anomaly-detector` must actually be running for the trigger to have any
+downstream effect (`ranAnomalyDetector.enabled` in Helm, off by default on fresh installs — see
+`docs/RAN-DEMO-SCRIPT.md`).
 
 ## Usage
 
