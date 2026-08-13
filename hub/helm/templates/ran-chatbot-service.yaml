@@ -27,6 +27,8 @@ spec:
               value: {{ .Values.ranChatbotService.env.kafkaBootstrap | quote }}
             - name: ENRICHED_ANOMALIES_TOPIC
               value: {{ .Values.ranChatbotService.env.enrichedAnomaliesTopic | quote }}
+            - name: DEMO_METRICS_TOPIC
+              value: {{ .Values.ranChatbotService.env.demoMetricsTopic | quote }}
             - name: MODEL_API_URL
               value: {{ .Values.ranChatbotService.env.modelApiUrl | quote }}
             - name: MODEL_NAME

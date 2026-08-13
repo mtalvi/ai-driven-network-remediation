@@ -549,6 +549,7 @@ ranChatbotService:
   env:
     kafkaBootstrap: "kafka:9092"
     enrichedAnomaliesTopic: "ran-anomalies-enriched"
+    demoMetricsTopic: "ran-combined-metrics"
     modelApiUrl: "http://llamastack-service:8321/v1/completions"
     modelName: "granite-4-h-tiny"
     corsOrigins: "http://localhost:3000"
