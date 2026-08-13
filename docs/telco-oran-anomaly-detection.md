@@ -290,6 +290,7 @@ For comparison, here's what the equivalent roles are in Workflow 1 (already exis
 | Root cause analysis service (RAG + Granite LLM) | [`hub/ran-rca-service/`](../hub/ran-rca-service/), see [`docs/telco-oran-rca.md`](telco-oran-rca.md) |
 | Chatbot entrypoint (see [§10](#10-the-chatbot-entrypoint-new-talking-to-detected-anomalies)) | [`hub/ran-chatbot-service/`](../hub/ran-chatbot-service/) |
 | RAN webapp (see [§11](#11-the-ran-webapp-new-visualizing-and-chatting-with-detected-anomalies)) | [`hub/ran-frontend/`](../hub/ran-frontend/) |
+| Demo trigger + recording script (see [§11.5](#115-demo-trigger)) | [`docs/RAN-DEMO-SCRIPT.md`](RAN-DEMO-SCRIPT.md) |
 | New Kafka topic definitions | [`hub/helm/charts/kafka/values.yaml`](../hub/helm/charts/kafka/values.yaml) |
 | New Helm Deployment/Service (detector) | [`hub/helm/templates/ran-anomaly-detector.yaml`](../hub/helm/templates/ran-anomaly-detector.yaml) |
 | New Helm Deployment/Service (RCA) | [`hub/helm/templates/ran-rca-service.yaml`](../hub/helm/templates/ran-rca-service.yaml) |
@@ -470,3 +471,29 @@ flowchart LR
 | New `GET /api/anomalies` endpoint | [`hub/ran-chatbot-service/src/ran_chatbot_service/__init__.py`](../hub/ran-chatbot-service/src/ran_chatbot_service/__init__.py) |
 | New Helm Deployment/Service/Route (webapp) | [`hub/helm/templates/ran-frontend.yaml`](../hub/helm/templates/ran-frontend.yaml) |
 | New Helm values block | [`hub/helm/values.yaml`](../hub/helm/values.yaml) (`ranFrontend:`) |
+
+### 11.5 Demo trigger
+
+The webapp's **Demo Mode** panel (`hub/ran-frontend/src/components/DemoTrigger.jsx`) calls a new
+`POST /api/demo/trigger` on `ran-chatbot-service` — the same pattern as `hub/chatbot-service`'s own
+demo trigger for Workflow 1 (see [§10](#10-the-chatbot-entrypoint-new-talking-to-detected-anomalies)):
+the BFF publishes straight to the real input topic (`ran-combined-metrics`) rather than calling any
+other RAN service directly, and everything downstream is the real, already-running pipeline.
+Unlike Workflow 1's JSON log events, the payload here is a single-row **CSV** blob matching
+`ran-anomaly-detector`'s expected column format
+(`hub/ran-chatbot-service/src/ran_chatbot_service/demo.py`).
+
+Two scenarios, using reserved `cell_id`s (`9001`/`9002`) so demo data is unmistakable in the UI:
+
+| Scenario | Fires | Cell |
+|---|---|---|
+| `low_signal` (default) | `LowRsrp` only | `9001` |
+| `cell_outage` | `CellOutage` + `LowRsrp` + `SinrDegradation` (independently RCA'd, so they land staggered over ~45-60s) | `9002` |
+
+**Prerequisite:** `ranAnomalyDetector.enabled` defaults to `false` on fresh installs (the image
+isn't always published for the selected `VERSION`) — the trigger has no visible effect unless that
+service is actually running (`ENABLE_RAN_ANOMALY=true` via Make, or `--set
+ranAnomalyDetector.enabled=true`).
+
+See [`docs/RAN-DEMO-SCRIPT.md`](RAN-DEMO-SCRIPT.md) for a full recording walkthrough (voiceover,
+timing, troubleshooting) covering both scenarios.

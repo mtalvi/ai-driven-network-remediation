@@ -51,13 +51,16 @@ In development, Vite's built-in proxy replaces nginx.
 
 | Endpoint | Method | Interval | What it drives |
 |----------|--------|----------|----------------|
-| `/api/anomalies` | GET | 10s poll | Header metrics, anomaly list panel |
+| `/api/anomalies` | GET | 10s poll (4s for ~75s after a demo trigger) | Header metrics, anomaly list panel |
 | `/api/chat` | POST | User action | Chat panel |
+| `/api/demo/trigger` | POST | User action | Demo Mode panel |
 
-`ran-chatbot-service` is deliberately thin — it has no `/api/summary`, `/api/integrations`, or
-`/api/demo/trigger` equivalent, so this webapp has no matching panels either. See
+`ran-chatbot-service` is deliberately thin — it has no `/api/summary` or `/api/integrations`
+equivalent, so this webapp has no matching panels either. See
 [`docs/telco-oran-anomaly-detection.md`](../../docs/telco-oran-anomaly-detection.md) for the full
-picture of what feeds `ran-chatbot-service`.
+picture of what feeds `ran-chatbot-service`, and
+[`docs/RAN-DEMO-SCRIPT.md`](../../docs/RAN-DEMO-SCRIPT.md) for a full demo-recording walkthrough
+of the Demo Mode panel.
 
 ### Dependency status (`_deps`)
 
@@ -90,11 +93,12 @@ hub/ran-frontend/
     ├── App.jsx           # Layout orchestrator
     ├── styles.css        # Dark, purple-accented theme
     ├── hooks/
-    │   └── usePolling.js # 10s interval polling of /api/anomalies
+    │   └── usePolling.js # Polls /api/anomalies (10s, or 4s for ~75s post-trigger)
     └── components/
         ├── ErrorBoundary.jsx  # Render-error fallback
         ├── DegradedBanner.jsx # Amber banner for _deps.status: "degraded"
         ├── HeaderMetrics.jsx  # Anomalies tracked, cells affected, Kafka status
+        ├── DemoTrigger.jsx    # Demo Mode: inject a synthetic reading into the real pipeline
         ├── AnomalyTable.jsx   # Recent anomalies: cell/band/type/root cause/fix
         └── ChatPanel.jsx      # RAN chat, parses the reply's Summary/Root Cause/
                                 #   Recommended Fix/Model Output sections
