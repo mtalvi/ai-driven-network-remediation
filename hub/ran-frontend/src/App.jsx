@@ -19,14 +19,14 @@ function getBaseUrl() {
 
 export default function App() {
   const baseUrl = useMemo(getBaseUrl, []);
-  const { anomalies, count, deps, lastUpdated, speedUpPolling } = usePolling(baseUrl);
+  const { anomalies, count, deps, lastUpdated, speedUpPolling, refetchNow } = usePolling(baseUrl);
 
   return (
     <main className="page">
       <DegradedBanner deps={deps} />
       <HeaderMetrics anomalies={anomalies} count={count} deps={deps} lastUpdated={lastUpdated} />
       <DemoTrigger baseUrl={baseUrl} onTriggered={speedUpPolling} />
-      <AnomalyTable anomalies={anomalies} />
+      <AnomalyTable anomalies={anomalies} baseUrl={baseUrl} onCleared={refetchNow} />
       <ChatPanel baseUrl={baseUrl} />
     </main>
   );

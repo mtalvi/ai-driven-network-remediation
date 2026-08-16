@@ -107,6 +107,36 @@ body {
   margin: 0 0 8px;
 }
 
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panel-title-row h2 {
+  margin: 0;
+}
+
+.toggle-btn {
+  border: 1px solid #4c3a80;
+  border-radius: 8px;
+  background: #1e1638;
+  color: #e0d4ff;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.toggle-btn:hover {
+  border-color: #a389ff;
+}
+
+.toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .empty-state {
   margin: 0;
   color: var(--muted);

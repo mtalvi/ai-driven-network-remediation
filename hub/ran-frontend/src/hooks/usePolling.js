@@ -25,9 +25,18 @@ export function usePolling(baseUrl) {
   const activeRef = useRef(true);
   const fastUntilRef = useRef(0);
   const timeoutRef = useRef(null);
+  const fetchDataRef = useRef(null);
 
   const speedUpPolling = useCallback((durationMs = FAST_POLL_DURATION) => {
     fastUntilRef.current = Date.now() + durationMs;
+  }, []);
+
+  // Lets callers (e.g. after a Clear or a demo trigger) force an immediate
+  // fetch instead of waiting for the next scheduled poll tick.
+  const refetchNow = useCallback(async () => {
+    if (fetchDataRef.current) {
+      await fetchDataRef.current();
+    }
   }, []);
 
   useEffect(() => {
@@ -62,6 +71,8 @@ export function usePolling(baseUrl) {
       }
     }
 
+    fetchDataRef.current = fetchData;
+
     function scheduleNext() {
       const interval = Date.now() < fastUntilRef.current ? FAST_POLL_INTERVAL : POLL_INTERVAL;
       timeoutRef.current = setTimeout(async () => {
@@ -80,5 +91,5 @@ export function usePolling(baseUrl) {
     };
   }, [baseUrl]);
 
-  return { anomalies, count, deps, loading, error, lastUpdated, speedUpPolling };
+  return { anomalies, count, deps, loading, error, lastUpdated, speedUpPolling, refetchNow };
 }

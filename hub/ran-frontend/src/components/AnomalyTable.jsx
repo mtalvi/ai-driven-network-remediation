@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 const ANOMALY_TYPE_LABELS = {
   LowRsrp: "Low RSRP",
   SinrDegradation: "SINR Degradation",
@@ -11,11 +13,43 @@ function typeLabel(anomalyType) {
   return ANOMALY_TYPE_LABELS[anomalyType] || anomalyType;
 }
 
-export function AnomalyTable({ anomalies }) {
+export function AnomalyTable({ anomalies, baseUrl, onCleared }) {
+  const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState("");
+  const hasAnomalies = Boolean(anomalies && anomalies.length > 0);
+
+  async function clearAnomalies() {
+    setClearing(true);
+    setError("");
+    try {
+      const url = baseUrl ? `${baseUrl}/api/anomalies` : "/api/anomalies";
+      const res = await fetch(url, { method: "DELETE" });
+      if (!res.ok) {
+        throw new Error(`Clear failed (${res.status})`);
+      }
+      await onCleared?.();
+    } catch (err) {
+      setError(err.message || "Failed to clear anomalies");
+    } finally {
+      setClearing(false);
+    }
+  }
+
   return (
     <section className="panel">
-      <h2>Recent Anomalies</h2>
-      {(!anomalies || anomalies.length === 0) ? (
+      <div className="panel-title-row">
+        <h2>Recent Anomalies</h2>
+        <button
+          type="button"
+          className="toggle-btn"
+          onClick={clearAnomalies}
+          disabled={clearing || !hasAnomalies}
+        >
+          {clearing ? "Clearing..." : "Clear"}
+        </button>
+      </div>
+      {error && <p className="demo-error">{error}</p>}
+      {!hasAnomalies ? (
         <p className="empty-state">
           No RAN anomalies detected yet. This panel updates automatically as new
           readings are processed.

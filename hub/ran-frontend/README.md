@@ -51,7 +51,8 @@ In development, Vite's built-in proxy replaces nginx.
 
 | Endpoint | Method | Interval | What it drives |
 |----------|--------|----------|----------------|
-| `/api/anomalies` | GET | 10s poll (4s for ~75s after a demo trigger) | Header metrics, anomaly list panel |
+| `/api/anomalies` | GET | 10s poll (4s for ~75s after a demo trigger; an immediate refetch after Clear) | Header metrics, anomaly list panel |
+| `/api/anomalies` | DELETE | User action | "Clear" button on the anomaly list panel |
 | `/api/chat` | POST | User action | Chat panel |
 | `/api/demo/trigger` | POST | User action | Demo Mode panel |
 
@@ -79,6 +80,15 @@ Both BFF endpoints include a `_deps` field, same convention as `hub/frontend`:
 unavailable if the model endpoint is unreachable — that's annotated inline on the affected chat
 reply instead.
 
+### Clearing the anomaly list
+
+The "Clear" button on the anomaly panel calls `DELETE /api/anomalies`, which empties
+`ran-chatbot-service`'s in-memory buffer immediately. This is a process-local reset, not a
+database delete: it does **not** survive a `ran-chatbot-service` restart or Kafka reconnect, since
+the buffer re-seeds itself from the last ~50 messages on `ran-anomalies-enriched` (7-day retention)
+every time it (re)connects. Useful for getting a clean slate before a demo recording — see
+[`docs/RAN-DEMO-SCRIPT.md`](../../docs/RAN-DEMO-SCRIPT.md).
+
 ## Project Structure
 
 ```
@@ -93,13 +103,13 @@ hub/ran-frontend/
     ├── App.jsx           # Layout orchestrator
     ├── styles.css        # Dark, purple-accented theme
     ├── hooks/
-    │   └── usePolling.js # Polls /api/anomalies (10s, or 4s for ~75s post-trigger)
+    │   └── usePolling.js # Polls /api/anomalies; exposes speedUpPolling() + refetchNow()
     └── components/
         ├── ErrorBoundary.jsx  # Render-error fallback
         ├── DegradedBanner.jsx # Amber banner for _deps.status: "degraded"
         ├── HeaderMetrics.jsx  # Anomalies tracked, cells affected, Kafka status
         ├── DemoTrigger.jsx    # Demo Mode: inject a synthetic reading into the real pipeline
-        ├── AnomalyTable.jsx   # Recent anomalies: cell/band/type/root cause/fix
+        ├── AnomalyTable.jsx   # Recent anomalies + "Clear" button (DELETE /api/anomalies)
         └── ChatPanel.jsx      # RAN chat, parses the reply's Summary/Root Cause/
                                 #   Recommended Fix/Model Output sections
 ```
