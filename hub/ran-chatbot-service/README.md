@@ -4,8 +4,8 @@ Thin conversational entrypoint (FastAPI BFF) for the Telco O-RAN anomaly detecti
 cause analysis use case. Exposes `POST /api/chat` so operators can ask about recently detected
 RAN cell anomalies, their likely root cause, and the recommended fix, in natural language. Also
 exposes `GET /api/anomalies` so a UI can render the current anomaly list directly, without going
-through chat, and `POST /api/demo/trigger` to inject a synthetic reading into the real pipeline
-for demos.
+through chat; `DELETE /api/anomalies` to clear that list for a clean demo/UI state; and
+`POST /api/demo/trigger` to inject a synthetic reading into the real pipeline for demos.
 
 ## Endpoints
 
@@ -15,6 +15,7 @@ for demos.
 | `/ready` | GET | Readiness (Kafka + LLM dependency status, always returns 200) |
 | `/api/chat` | POST | Conversational reply grounded in recently detected anomalies |
 | `/api/anomalies` | GET | Recent enriched anomalies (in-memory buffer), newest first |
+| `/api/anomalies` | DELETE | Clear the in-memory anomaly buffer |
 | `/api/demo/trigger` | POST | Publish a synthetic RAN KPI reading to `ran-combined-metrics` for demos |
 
 This service is a **thin channel layer**: it does not detect anomalies or perform root cause
@@ -48,6 +49,11 @@ history immediately, rather than only filling in as new anomalies trickle in. It
 does **not** use a Kafka consumer group — the topic has multiple partitions, and a shared group
 would split them across replicas if this service is ever scaled beyond one, so each replica stays
 group-less and independently sees the full topic.
+
+`DELETE /api/anomalies` clears that in-memory buffer directly (`deque.clear()`) for a clean
+demo/UI state. It does **not** survive a restart or Kafka reconnect: `_seed_recent_history()`
+re-drains the same recent window from `ran-anomalies-enriched` (7-day retention by default) on
+every (re)connect, so anomalies still on that topic will resurface then.
 
 That topic is populated by [`ran-rca-service`](../ran-rca-service) (LLM root cause analysis + RAG-
 based recommended fix), which enriches each anomaly detected by

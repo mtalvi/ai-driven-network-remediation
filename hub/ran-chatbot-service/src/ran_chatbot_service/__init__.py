@@ -13,11 +13,12 @@ fills an in-memory buffer from that topic; request handlers just read the
 buffer directly, with no per-request Kafka I/O.
 
 Endpoints:
-  GET  /health           - Liveness probe
-  GET  /ready             - Readiness probe (Kafka + LLM dependency status)
-  GET  /api/anomalies     - Recent enriched anomalies, newest first
-  POST /api/chat          - RAN anomaly chat backed by an LLM with anomaly context
-  POST /api/demo/trigger  - Publish a synthetic RAN KPI reading to the real pipeline
+  GET    /health           - Liveness probe
+  GET    /ready             - Readiness probe (Kafka + LLM dependency status)
+  GET    /api/anomalies     - Recent enriched anomalies, newest first
+  DELETE /api/anomalies     - Clear the in-memory anomaly buffer
+  POST   /api/chat          - RAN anomaly chat backed by an LLM with anomaly context
+  POST   /api/demo/trigger  - Publish a synthetic RAN KPI reading to the real pipeline
 """
 
 from __future__ import annotations
@@ -152,6 +153,26 @@ def anomalies(request: Request) -> dict:
         "_deps": build_deps({"kafka": kafka_ok}),
         "count": len(recent),
         "anomalies": [a.model_dump() for a in recent],
+    }
+
+
+@app.delete("/api/anomalies")
+def clear_anomalies(request: Request) -> dict:
+    """Clear the in-memory anomaly buffer, e.g. for a clean demo/UI state.
+
+    Only clears what's currently buffered in this process. It does not
+    survive a restart or Kafka reconnect: AnomaliesConsumer's
+    _seed_recent_history() re-drains the same recent window from
+    ran-anomalies-enriched (7-day retention by default) every time it
+    (re)connects, so old anomalies still on that topic will resurface then.
+    """
+    request.app.state.recent_anomalies.clear()
+    kafka_ok = request.app.state.kafka_consumer.is_connected
+
+    return {
+        "_deps": build_deps({"kafka": kafka_ok}),
+        "status": "cleared",
+        "count": 0,
     }
 
 

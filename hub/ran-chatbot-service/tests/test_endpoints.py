@@ -89,6 +89,34 @@ def test_anomalies_deps_degraded_when_kafka_down(client):
     assert resp.json()["_deps"] == {"status": "degraded", "unavailable": ["kafka"]}
 
 
+def test_clear_anomalies_empties_the_buffer(client, sample_anomaly):
+    client.app.state.recent_anomalies.append(sample_anomaly)
+    client.app.state.recent_anomalies.append(sample_anomaly)
+
+    resp = client.delete("/api/anomalies")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "cleared"
+    assert data["count"] == 0
+    assert "_deps" in data
+
+    # The buffer itself is empty now, not just the reported count.
+    follow_up = client.get("/api/anomalies")
+    assert follow_up.json()["count"] == 0
+
+
+def test_clear_anomalies_on_empty_buffer_is_a_noop(client):
+    resp = client.delete("/api/anomalies")
+    assert resp.status_code == 200
+    assert resp.json()["count"] == 0
+
+
+def test_clear_anomalies_deps_reflects_kafka_status(client):
+    client.app.state.kafka_consumer.is_connected = False
+    resp = client.delete("/api/anomalies")
+    assert resp.json()["_deps"] == {"status": "degraded", "unavailable": ["kafka"]}
+
+
 @patch("ran_chatbot_service.publish_demo_metrics")
 def test_demo_trigger_low_signal(mock_publish, client):
     mock_publish.return_value = 7
