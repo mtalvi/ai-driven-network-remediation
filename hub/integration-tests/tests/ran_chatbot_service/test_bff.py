@@ -5,12 +5,13 @@ Set RAN_CHATBOT_SERVICE_URL env var to override the default http://localhost:800
 
 Unlike hub/chatbot-service's BFF, this service has no /api/summary or
 /api/integrations endpoints — it is a thin channel layer with /health, /ready,
-/api/chat, /api/anomalies, and /api/demo/trigger, backed by a background Kafka
-consumer (see hub/ran-chatbot-service's README) rather than per-request calls,
-so most of these tests don't need to trigger or wait for any Kafka event
-themselves. test_demo_trigger is the exception: it actually publishes a
-synthetic reading to ran-combined-metrics, the same way a real operator
-clicking the webapp's demo button would.
+/api/chat, /api/anomalies (GET + DELETE), and /api/demo/trigger, backed by a
+background Kafka consumer (see hub/ran-chatbot-service's README) rather than
+per-request calls, so most of these tests don't need to trigger or wait for
+any Kafka event themselves. test_demo_trigger is the exception: it actually
+publishes a synthetic reading to ran-combined-metrics, the same way a real
+operator clicking the webapp's demo button would. test_clear_anomalies wipes
+the live buffer, so it runs last in this file.
 """
 
 
@@ -128,3 +129,18 @@ def test_chat_preserves_session_history(ran_chatbot_client):
     assert second.status_code == 200
     assert first.json()["session_id"] == session_id
     assert second.json()["session_id"] == session_id
+
+
+def test_clear_anomalies(ran_chatbot_client):
+    """Clearing the buffer empties it immediately (verified via a follow-up
+    GET). Runs last in this file since it wipes whatever's currently
+    buffered, including anything test_demo_trigger published above."""
+    response = ran_chatbot_client.delete("/api/anomalies")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "cleared"
+    assert data["count"] == 0
+    assert "_deps" in data
+
+    follow_up = ran_chatbot_client.get("/api/anomalies")
+    assert follow_up.json()["count"] == 0
