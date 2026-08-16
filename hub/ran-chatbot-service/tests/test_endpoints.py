@@ -163,6 +163,18 @@ def test_demo_trigger_kafka_failure_reported_as_502(mock_publish, client):
     assert data["cell_id"] == 9001
 
 
+@patch("ran_chatbot_service.publish_demo_metrics")
+def test_demo_trigger_failure_does_not_leak_exception_details(mock_publish, client):
+    """Regression test: the response must not expose str(exc), which could
+    contain internal infra details like broker addresses/DNS names — only a
+    generic message (the real exception is captured via logger.exception)."""
+    mock_publish.side_effect = Exception("Connection to broker kafka-internal.svc:9092 failed")
+    resp = client.post("/api/demo/trigger", json={"scenario": "low_signal"})
+    data = resp.json()
+    assert data["error"] == "Failed to publish demo metrics to Kafka"
+    assert "kafka-internal.svc" not in data["error"]
+
+
 @patch("ran_chatbot_service.call_model", new_callable=AsyncMock)
 def test_chat(mock_model, client, sample_anomalies):
     mock_model.return_value = ("Cell 42 has weak signal due to distance from the antenna.", "live")

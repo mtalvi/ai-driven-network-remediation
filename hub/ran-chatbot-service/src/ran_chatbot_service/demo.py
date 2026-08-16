@@ -118,9 +118,13 @@ def publish_demo_metrics(csv_blob: str) -> int:
     from kafka import KafkaProducer
 
     producer = KafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP)
-    future = producer.send(DEMO_METRICS_TOPIC, value=csv_blob.encode("utf-8"))
-    metadata = future.get(timeout=10)
-    producer.flush(timeout=10)
-    producer.close(timeout=10)
+    try:
+        future = producer.send(DEMO_METRICS_TOPIC, value=csv_blob.encode("utf-8"))
+        metadata = future.get(timeout=10)
+    finally:
+        # close() flushes internally, so no separate flush() call is needed;
+        # the finally block also guarantees the producer (its background
+        # sender thread + socket) isn't leaked if future.get() raises.
+        producer.close(timeout=10)
     logger.info("Published demo RAN metrics to %s at offset %d", DEMO_METRICS_TOPIC, metadata.offset)
     return int(metadata.offset)

@@ -572,7 +572,12 @@ ranChatbotService:
     periodSeconds: 10
 
 ranFrontend:
-  enabled: true
+  # Off by default, same as ranAnomalyDetector above: without the detector
+  # running, this webapp would just show an empty dashboard with a demo
+  # trigger that has no visible effect. Enable both together via
+  # ENABLE_RAN_ANOMALY=true (make) or --set ranAnomalyDetector.enabled=true
+  # --set ranFrontend.enabled=true.
+  enabled: false
   replicaCount: 1
   service:
     type: ClusterIP

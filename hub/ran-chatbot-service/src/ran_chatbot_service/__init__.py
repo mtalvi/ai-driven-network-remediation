@@ -186,14 +186,18 @@ async def trigger_demo(req: DemoTriggerRequest, request: Request) -> dict:
     csv_blob, meta = build_demo_csv(req.scenario)
     try:
         offset = await asyncio.to_thread(publish_demo_metrics, csv_blob)
-    except Exception as exc:
+    except Exception:
+        # Don't expose str(exc) to the client: Kafka producer failures (e.g.
+        # NoBrokersAvailable, KafkaTimeoutError) can include broker
+        # addresses/DNS names in their message. The full exception + stack
+        # trace is already captured server-side by logger.exception above.
         logger.exception("Failed to publish demo RAN metrics for scenario=%s", req.scenario)
         return JSONResponse(
             status_code=502,
             content={
                 "timestamp": utc_now(),
                 "status": "error",
-                "error": str(exc),
+                "error": "Failed to publish demo metrics to Kafka",
                 "scenario": meta["scenario"],
                 "cell_id": meta["cell_id"],
                 "band": meta["band"],

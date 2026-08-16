@@ -490,10 +490,12 @@ Two scenarios, using reserved `cell_id`s (`9001`/`9002`) so demo data is unmista
 | `low_signal` (default) | `LowRsrp` only | `9001` |
 | `cell_outage` | `CellOutage` + `LowRsrp` + `SinrDegradation` (independently RCA'd, so they land staggered over ~45-60s) | `9002` |
 
-**Prerequisite:** `ranAnomalyDetector.enabled` defaults to `false` on fresh installs (the image
-isn't always published for the selected `VERSION`) — the trigger has no visible effect unless that
-service is actually running (`ENABLE_RAN_ANOMALY=true` via Make, or `--set
-ranAnomalyDetector.enabled=true`).
+**Prerequisite:** `ranAnomalyDetector.enabled` and `ranFrontend.enabled` both default to `false` on
+fresh installs (the images aren't always published for the selected `VERSION`, and there's no
+point deploying the webapp without the pipeline behind it — it would just show an empty dashboard
+with a demo trigger that has no visible effect). `ENABLE_RAN_ANOMALY=true` via Make enables both
+together; via raw Helm, set both explicitly: `--set ranAnomalyDetector.enabled=true --set
+ranFrontend.enabled=true`.
 
 See [`docs/RAN-DEMO-SCRIPT.md`](RAN-DEMO-SCRIPT.md) for a full recording walkthrough (voiceover,
 timing, troubleshooting) covering both scenarios.

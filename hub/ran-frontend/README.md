@@ -123,13 +123,15 @@ make build-ran-frontend-image
 # Push to registry
 podman push quay.io/rh-ai-quickstart/noc-ran-frontend:0.1.5
 
-# Deploy with Helm (deploys all services including this one)
-make helm-install
+# Deploy with Helm, turning on the RAN demo stack (detector + this webapp)
+make helm-install ENABLE_RAN_ANOMALY=true
 ```
 
 The Helm chart creates a Deployment, Service, and OpenShift Route with TLS edge termination,
-gated behind `ranFrontend.enabled` (default `true`) so it can be toggled independently of the
-rest of the Telco/O-RAN stack.
+gated behind `ranFrontend.enabled` (default `false`, same as `ranAnomalyDetector.enabled`) so a
+fresh install doesn't deploy a webapp with an empty dashboard and a demo trigger that has no
+visible effect. `make ... ENABLE_RAN_ANOMALY=true` enables both together; it can still be toggled
+independently via `--set ranFrontend.enabled=true/false`.
 
 ## Environment Variables
 

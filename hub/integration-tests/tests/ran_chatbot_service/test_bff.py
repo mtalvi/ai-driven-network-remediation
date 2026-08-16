@@ -11,8 +11,12 @@ per-request calls, so most of these tests don't need to trigger or wait for
 any Kafka event themselves. test_demo_trigger is the exception: it actually
 publishes a synthetic reading to ran-combined-metrics, the same way a real
 operator clicking the webapp's demo button would. test_clear_anomalies wipes
-the live buffer, so it runs last in this file.
+the live buffer, so it's pinned via @pytest.mark.order to run after
+test_demo_trigger explicitly (not relying on file-declaration order, which
+isn't guaranteed under e.g. a future pytest-randomly addition or a -k filter).
 """
+
+import pytest
 
 
 def test_health(ran_chatbot_client):
@@ -131,10 +135,12 @@ def test_chat_preserves_session_history(ran_chatbot_client):
     assert second.json()["session_id"] == session_id
 
 
+@pytest.mark.order(after="test_demo_trigger")
 def test_clear_anomalies(ran_chatbot_client):
     """Clearing the buffer empties it immediately (verified via a follow-up
-    GET). Runs last in this file since it wipes whatever's currently
-    buffered, including anything test_demo_trigger published above."""
+    GET). Explicitly ordered to run after test_demo_trigger (rather than
+    relying on file-declaration order) since it wipes whatever's currently
+    buffered, including anything that test published."""
     response = ran_chatbot_client.delete("/api/anomalies")
     assert response.status_code == 200
     data = response.json()

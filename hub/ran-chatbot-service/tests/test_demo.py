@@ -2,8 +2,11 @@
 
 import csv
 import io
+from unittest.mock import MagicMock, patch
 
-from ran_chatbot_service.demo import CSV_COLUMNS, build_demo_csv
+import pytest
+
+from ran_chatbot_service.demo import CSV_COLUMNS, build_demo_csv, publish_demo_metrics
 
 
 def _parse(csv_blob: str) -> list[dict]:
@@ -66,3 +69,34 @@ class TestBuildDemoCsv:
         # Not asserting against wall-clock time (flaky under CI clock skew),
         # just that it's a well-formed ISO datetime csv_mapper can parse.
         datetime.fromisoformat(row["datetime"])
+
+
+class TestPublishDemoMetrics:
+    @patch("kafka.KafkaProducer")
+    def test_closes_producer_and_returns_offset_on_success(self, mock_producer_cls):
+        mock_producer = MagicMock()
+        mock_producer.send.return_value.get.return_value = MagicMock(offset=42)
+        mock_producer_cls.return_value = mock_producer
+
+        offset = publish_demo_metrics("csv,blob")
+
+        assert offset == 42
+        mock_producer.close.assert_called_once_with(timeout=10)
+        # close() flushes internally, so an explicit flush() call would be
+        # redundant dead work — verify we don't make one.
+        mock_producer.flush.assert_not_called()
+
+    @patch("kafka.KafkaProducer")
+    def test_closes_producer_even_if_future_get_raises(self, mock_producer_cls):
+        """Regression test: a prior version skipped close() whenever
+        future.get() raised (e.g. a Kafka timeout), leaking the producer's
+        background sender thread and socket connection on every failed
+        demo-trigger click."""
+        mock_producer = MagicMock()
+        mock_producer.send.return_value.get.side_effect = Exception("Kafka unreachable")
+        mock_producer_cls.return_value = mock_producer
+
+        with pytest.raises(Exception, match="Kafka unreachable"):
+            publish_demo_metrics("csv,blob")
+
+        mock_producer.close.assert_called_once_with(timeout=10)

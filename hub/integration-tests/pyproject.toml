@@ -6,6 +6,7 @@ requires-python = ">=3.13"
 dependencies = [
     "httpx>=0.28",
     "pytest>=8.0",
+    "pytest-order>=1.5.0",
     "pytest-rerunfailures>=15.0",
 ]
 
@@ -14,4 +15,5 @@ testpaths = ["tests"]
 markers = [
     "integration: integration tests requiring deployed services",
     "e2e: end-to-end tests requiring full RAG stack",
+    "order: explicit test execution order (pytest-order)",
 ]

@@ -300,6 +300,7 @@ helm_all_args = \
 	--set image.frontend=noc-frontend \
 	--set image.tag=$(VERSION) \
 	--set ranAnomalyDetector.enabled=$(ENABLE_RAN_ANOMALY) \
+	--set ranFrontend.enabled=$(ENABLE_RAN_ANOMALY) \
 	--set global.routes.enabled=$(ROUTES_ENABLED) \
 	--set edgeRbac.enabled=$(EDGE_RBAC_ENABLED) \
 	--set-string edgeRbac.edgeNamespace='$(EDGE_NAMESPACE)' \
