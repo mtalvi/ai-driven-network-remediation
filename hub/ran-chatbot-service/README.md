@@ -18,6 +18,16 @@ through chat; `DELETE /api/anomalies` to clear that list for a clean demo/UI sta
 | `/api/anomalies` | DELETE | Clear the in-memory anomaly buffer |
 | `/api/demo/trigger` | POST | Publish a synthetic RAN KPI reading to `ran-combined-metrics` for demos |
 
+**None of these endpoints check authentication or authorization themselves** — this service has no
+concept of a caller identity. In production this BFF is never exposed directly (no Route of its
+own); it's only reachable through `hub-ran-frontend`'s nginx `/api/` proxy, which is what
+[`hub/ran-frontend`](../ran-frontend/README.md)'s "Access control" section documents: an optional
+`global.frontendAuth.enabled` OpenShift `oauth-proxy` gate in front of the Route (off by default),
+plus always-on nginx rate limiting that's stricter for `POST /api/demo/trigger` and
+`DELETE /api/anomalies` than for the polled `GET /api/anomalies`. If this service is ever reached
+another way (e.g. a direct Route, or from outside the cluster), it would need that same protection
+applied at that new entry point too, since none of it lives in this service's own code.
+
 This service is a **thin channel layer**: it does not detect anomalies or perform root cause
 analysis itself. That domain logic lives in [`ran-anomaly-detector`](../ran-anomaly-detector)
 (rule-based detection) and the upstream `ran-rca-service` (LLM root cause analysis + RAG

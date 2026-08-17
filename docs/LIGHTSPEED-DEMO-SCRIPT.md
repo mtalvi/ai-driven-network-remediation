@@ -27,6 +27,11 @@ Slack notification → Audit record.
 **Before recording**: Just reload the browser (F5) on the dashboard. No rebuild needed —
 all code changes are already deployed.
 
+The Route is unauthenticated by default, so recording needs no login step — just open the URL. If
+your deployment set `global.frontendAuth.enabled=true` (see `hub/frontend/FRONTEND.md` "Access
+control"), the Route will redirect to an OpenShift login page first; authenticate once and the rest
+of this script is unaffected.
+
 ---
 
 ## Screen Layout for Recording

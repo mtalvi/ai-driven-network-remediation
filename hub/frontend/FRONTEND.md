@@ -142,6 +142,40 @@ make helm-install
 
 The Helm chart creates a Deployment, Service, and OpenShift Route with TLS edge termination.
 
+## Access control
+
+By default, the Route is **unauthenticated** — nginx proxies `/api/*` straight to `hub-chatbot-service`
+with no login of any kind, including the endpoints with real side effects (`POST /api/demo/trigger`
+publishes to the live `system-alerts` Kafka topic). This is intentional for local/demo use: anyone
+with the cluster can `make helm-install` and click the demo buttons with zero setup, matching the
+"Current Demo" narrative above.
+
+For a shared or persistent cluster where the Route hostname might leak or be guessed, set
+`global.frontendAuth.enabled=true` (or `make helm-install FRONTEND_AUTH_ENABLED=true`) to put an
+OpenShift `oauth-proxy` sidecar in front of both this frontend and `hub-ran-frontend` — the standard
+OpenShift pattern for gating a Route behind a cluster login. When enabled:
+
+- The Service starts routing to the sidecar (port `8888`) instead of nginx directly; nginx keeps
+  listening on `8080` but only the sidecar (same pod, `localhost`) can reach it.
+- A `ServiceAccount` per frontend is created, annotated with
+  `serviceaccounts.openshift.io/oauth-redirectreference.primary` so the sidecar can self-register
+  as an OAuth client for that frontend's own Route — no manual `OAuthClient` object needed.
+- A visitor hitting the Route is redirected to the cluster's login page; after authenticating, every
+  same-origin request the SPA makes (including the demo-trigger and chat calls) just carries the
+  resulting session cookie automatically — no frontend or BFF code changes needed.
+- `npm run dev` and `oc port-forward` workflows are unaffected either way — the sidecar only wraps
+  the built container's Route, not local dev traffic.
+
+This is off by default so it doesn't change behavior for existing installs or break the demo
+recording flow. See [`docs/LIGHTSPEED-DEMO-SCRIPT.md`](../../docs/LIGHTSPEED-DEMO-SCRIPT.md) for
+this workflow's demo script.
+
+Independently of that toggle, `nginx.conf` always rate-limits `/api/*` (see the `limit_req_zone`
+directives at the top of the file): a generous zone for the polled `GET` endpoints
+(`/api/summary`, `/api/integrations`) and `POST /api/chat`, and a much stricter zone for
+`POST /api/demo/trigger` specifically, since it's the one endpoint here with a real side effect
+(publishing to Kafka) and is only ever click-driven, never polled.
+
 ## Environment Variables
 
 | Variable | Where | Purpose |

@@ -134,6 +134,32 @@ together. Disable the entire use case with `ENABLE_TELCO_ORAN=false` (Make) / `-
 global.telcoOran.enabled=false` (Helm), or toggle just this webapp via `--set
 ranFrontend.enabled=false`.
 
+## Access control
+
+By default, the Route is **unauthenticated** — nginx proxies `/api/*` straight to
+`hub-ran-chatbot-service` with no login of any kind, including the two endpoints with real side
+effects: `POST /api/demo/trigger` (publishes to the live `ran-combined-metrics` Kafka topic) and
+`DELETE /api/anomalies` (wipes the live anomaly buffer). This is intentional for local/demo use —
+see [`docs/RAN-DEMO-SCRIPT.md`](../../docs/RAN-DEMO-SCRIPT.md).
+
+For a shared or persistent cluster where the Route hostname might leak or be guessed, set
+`global.frontendAuth.enabled=true` (or `make helm-install FRONTEND_AUTH_ENABLED=true`) to put an
+OpenShift `oauth-proxy` sidecar in front of both this frontend and `hub/frontend` (the same toggle
+protects both, so the two dashboards stay consistent) — the standard OpenShift pattern for gating a
+Route behind a cluster login. When enabled, a visitor hitting the Route is redirected to the
+cluster's login page; after authenticating, every same-origin request the SPA makes — including
+the "Clear" button's `DELETE /api/anomalies` and the Demo Mode `POST /api/demo/trigger` — just
+carries the resulting session cookie automatically, so neither button needs any code change.
+`npm run dev` and `oc port-forward` workflows are unaffected either way. This is off by default so
+it doesn't change behavior for existing installs or break the demo recording flow.
+
+Independently of that toggle, `nginx.conf` always rate-limits `/api/*` (see the `limit_req_zone`
+and `map` directives at the top of the file): a generous zone for the polled `GET /api/anomalies`
+traffic, and a much stricter zone — shared between `POST /api/demo/trigger` and
+`DELETE /api/anomalies` — since both are click-driven, never polled, and are the two endpoints with
+real side effects. A `map` on `$request_method` keeps `GET /api/anomalies` out of the strict zone
+even though it shares a path with `DELETE /api/anomalies`.
+
 ## Environment Variables
 
 | Variable | Where | Purpose |
