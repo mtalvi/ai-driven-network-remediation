@@ -7,6 +7,12 @@ EDGE_NAMESPACE  ?= dark-noc-edge
 RELEASE         ?= hub
 PUSH_EXTRA_ARGS ?=
 ROUTES_ENABLED  ?= true
+# Gate an OpenShift oauth-proxy sidecar in front of hub-frontend and
+# hub-ran-frontend, requiring a cluster login before either Route (or its
+# /api/* proxy) is reachable. Off by default to keep the "click a demo
+# button, no login needed" experience working out of the box; turn on for
+# shared/persistent clusters (see hub/frontend/FRONTEND.md "Access control").
+FRONTEND_AUTH_ENABLED ?= false
 
 # ── Multi-cluster topology (CLUSTER_COUNT) ───────────────────────
 # 1      = single-cluster dev (hub chart + simulated edge namespace)
@@ -310,6 +316,7 @@ helm_all_args = \
 	--set global.telcoOran.enabled=$(ENABLE_TELCO_ORAN) \
 	--set global.networkRemediation.enabled=$(ENABLE_NETWORK_REMEDIATION) \
 	--set global.routes.enabled=$(ROUTES_ENABLED) \
+	--set global.frontendAuth.enabled=$(FRONTEND_AUTH_ENABLED) \
 	--set edgeRbac.enabled=$(EDGE_RBAC_ENABLED) \
 	--set-string edgeRbac.edgeNamespace='$(EDGE_NAMESPACE)' \
 	--set-string mcp-servers.mcp-servers.noc-openshift.env.DEFAULT_NAMESPACE='$(EDGE_NAMESPACE)' \
