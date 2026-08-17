@@ -56,3 +56,63 @@ Namespace defaults to the release namespace when empty.
 {{- $ns := .Values.lokistack.namespace | default .Release.Namespace }}
 {{- printf "https://%s-gateway-http.%s.svc:8080" .Values.lokistack.name $ns }}
 {{- end }}
+
+{{/*
+ServiceAccount for an OpenShift oauth-proxy sidecar, shared by hub-frontend
+and hub-ran-frontend (see global.frontendAuth.enabled). The redirect
+reference annotation is what lets oauth-proxy self-register as an OAuth
+client for the frontend's own Route, with no manual OAuthClient object.
+Expects a dict: "component" (e.g. "frontend", "ran-frontend") and "context"
+(the root chart context, i.e. $).
+*/}}
+{{- define "hub.oauthProxyServiceAccount" -}}
+{{- $component := .component }}
+{{- $ctx := .context }}
+{{- $name := printf "%s-%s" (include "hub.fullname" $ctx) $component }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hub.labels" $ctx | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+  annotations:
+    serviceaccounts.openshift.io/oauth-redirectreference.primary: {{ printf "{\"kind\":\"OAuthRedirectReference\",\"apiVersion\":\"v1\",\"reference\":{\"kind\":\"Route\",\"name\":\"%s\"}}" $name | quote }}
+{{- end }}
+
+{{/*
+OpenShift oauth-proxy sidecar container, shared by hub-frontend and
+hub-ran-frontend. Requires an authenticated OpenShift login before letting
+traffic through to nginx on localhost:8080 (the SPA + its /api/* proxy).
+Stays on plain HTTP internally, same as the nginx container it fronts —
+the existing Route already terminates TLS at the edge, so no additional
+serving-cert/TLS plumbing is needed inside the pod. Expects a dict:
+"component" (e.g. "frontend", "ran-frontend") and "context" (the root chart
+context, i.e. $).
+*/}}
+{{- define "hub.oauthProxyContainer" -}}
+{{- $component := .component }}
+{{- $ctx := .context }}
+{{- $name := printf "%s-%s" (include "hub.fullname" $ctx) $component }}
+- name: oauth-proxy
+  image: {{ $ctx.Values.global.frontendAuth.image }}
+  args:
+    - --http-address=0.0.0.0:8888
+    - --https-address=
+    - --provider=openshift
+    - --openshift-service-account={{ $name }}
+    - --upstream=http://localhost:8080
+    - --cookie-secret=$(COOKIE_SECRET)
+    - {{ printf "--openshift-sar={\"resource\":\"namespaces\",\"verb\":\"get\",\"name\":\"%s\"}" $ctx.Release.Namespace | quote }}
+    - --skip-provider-button=true
+  env:
+    - name: COOKIE_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: {{ $name }}-oauth
+          key: cookie-secret
+  ports:
+    - name: public
+      containerPort: 8888
+      protocol: TCP
+{{- end }}

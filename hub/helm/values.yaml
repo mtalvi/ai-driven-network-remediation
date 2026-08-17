@@ -19,6 +19,16 @@ global:
     enabled: true
   telcoOran:
     enabled: true
+  # Gates an OpenShift oauth-proxy sidecar in front of hub-frontend and
+  # hub-ran-frontend so their Routes require an authenticated OpenShift login
+  # before reaching the SPA or its /api/* proxy (see hub/frontend/FRONTEND.md
+  # and hub/ran-frontend/README.md "Access control"). Off by default so the
+  # "click a demo button, no login needed" experience documented in
+  # docs/RAN-DEMO-SCRIPT.md and docs/LIGHTSPEED-DEMO-SCRIPT.md keeps working
+  # out of the box; turn on for shared/persistent clusters.
+  frontendAuth:
+    enabled: false
+    image: "quay.io/openshift/origin-oauth-proxy:latest"
 
 # ══════════════════════════════════════════════════════════════════════
 # Multi-cluster topology (CLUSTER_COUNT)

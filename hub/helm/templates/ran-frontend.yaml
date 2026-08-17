@@ -18,6 +18,9 @@ spec:
         {{- include "hub.labels" . | nindent 8 }}
         app.kubernetes.io/component: ran-frontend
     spec:
+      {{- if .Values.global.frontendAuth.enabled }}
+      serviceAccountName: {{ include "hub.fullname" . }}-ran-frontend
+      {{- end }}
       containers:
         - name: ran-frontend
           image: "{{ .Values.image.registry }}/{{ .Values.image.ranFrontend }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -32,6 +35,9 @@ spec:
             {{- toYaml .Values.ranFrontend.readinessProbe | nindent 12 }}
           resources:
             {{- toYaml .Values.ranFrontend.resources | nindent 12 }}
+        {{- if .Values.global.frontendAuth.enabled }}
+        {{- include "hub.oauthProxyContainer" (dict "component" "ran-frontend" "context" $) | nindent 8 }}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -44,12 +50,20 @@ spec:
   type: {{ .Values.ranFrontend.service.type }}
   ports:
     - port: {{ .Values.ranFrontend.service.port }}
+      {{- if .Values.global.frontendAuth.enabled }}
+      targetPort: 8888
+      {{- else }}
       targetPort: {{ .Values.ranFrontend.service.targetPort }}
+      {{- end }}
       protocol: TCP
       name: http
   selector:
     {{- include "hub.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: ran-frontend
+{{- if .Values.global.frontendAuth.enabled }}
+---
+{{ include "hub.oauthProxyServiceAccount" (dict "component" "ran-frontend" "context" $) }}
+{{- end }}
 {{- if .Values.global.routes.enabled }}
 ---
 apiVersion: route.openshift.io/v1

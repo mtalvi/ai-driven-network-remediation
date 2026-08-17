@@ -18,6 +18,9 @@ spec:
         {{- include "hub.labels" . | nindent 8 }}
         app.kubernetes.io/component: frontend
     spec:
+      {{- if .Values.global.frontendAuth.enabled }}
+      serviceAccountName: {{ include "hub.fullname" . }}-frontend
+      {{- end }}
       containers:
         - name: frontend
           image: "{{ .Values.image.registry }}/{{ .Values.image.frontend }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -32,6 +35,9 @@ spec:
             {{- toYaml .Values.frontend.readinessProbe | nindent 12 }}
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
+        {{- if .Values.global.frontendAuth.enabled }}
+        {{- include "hub.oauthProxyContainer" (dict "component" "frontend" "context" $) | nindent 8 }}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -44,12 +50,20 @@ spec:
   type: {{ .Values.frontend.service.type }}
   ports:
     - port: {{ .Values.frontend.service.port }}
+      {{- if .Values.global.frontendAuth.enabled }}
+      targetPort: 8888
+      {{- else }}
       targetPort: {{ .Values.frontend.service.targetPort }}
+      {{- end }}
       protocol: TCP
       name: http
   selector:
     {{- include "hub.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: frontend
+{{- if .Values.global.frontendAuth.enabled }}
+---
+{{ include "hub.oauthProxyServiceAccount" (dict "component" "frontend" "context" $) }}
+{{- end }}
 {{- if .Values.global.routes.enabled }}
 ---
 apiVersion: route.openshift.io/v1
