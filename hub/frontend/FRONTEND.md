@@ -58,7 +58,7 @@ hub/frontend/
 ├── vite.config.js        # Dev server + API proxy
 ├── index.html            # SPA entry
 ├── Containerfile         # Multi-stage build (node → nginx)
-├── nginx.conf            # Reverse proxy for /api/*
+├── nginx.conf.template   # Reverse proxy for /api/* (envsubst'd at container startup)
 └── src/
     ├── main.jsx          # React root
     ├── App.jsx           # Layout orchestrator
@@ -155,8 +155,13 @@ For a shared or persistent cluster where the Route hostname might leak or be gue
 OpenShift `oauth-proxy` sidecar in front of both this frontend and `hub-ran-frontend` — the standard
 OpenShift pattern for gating a Route behind a cluster login. When enabled:
 
-- The Service starts routing to the sidecar (port `8888`) instead of nginx directly; nginx keeps
-  listening on `8080` but only the sidecar (same pod, `localhost`) can reach it.
+- The Service starts routing to the sidecar (port `8888`) instead of nginx directly, **and** nginx
+  itself switches from listening on `0.0.0.0:8080` to `127.0.0.1:8080` only (via an
+  `NGINX_LISTEN_ADDRESS` env override into the templated `nginx.conf.template` — see the
+  Containerfile). Without this, any in-cluster client could still hit the pod's IP on `8080`
+  directly and skip OAuth entirely, even with the Service pointed elsewhere. Because httpGet
+  liveness/readiness probes connect to the pod's routable IP rather than loopback, they're swapped
+  for an `exec`-based `wget` probe run inside the container's own network namespace instead.
 - A `ServiceAccount` per frontend is created, annotated with
   `serviceaccounts.openshift.io/oauth-redirectreference.primary` so the sidecar can self-register
   as an OAuth client for that frontend's own Route — no manual `OAuthClient` object needed.
@@ -170,11 +175,27 @@ This is off by default so it doesn't change behavior for existing installs or br
 recording flow. See [`docs/LIGHTSPEED-DEMO-SCRIPT.md`](../../docs/LIGHTSPEED-DEMO-SCRIPT.md) for
 this workflow's demo script.
 
-Independently of that toggle, `nginx.conf` always rate-limits `/api/*` (see the `limit_req_zone`
+**Note:** defaulting this to off (and letting it be disabled at all) is a QuickStart/demo
+convenience, not something a released product should ship — see the comment on
+`global.frontendAuth` in `hub/helm/values.yaml`.
+
+Independently of that toggle, `nginx.conf.template` always rate-limits `/api/*` (see the `limit_req_zone`
 directives at the top of the file): a generous zone for the polled `GET` endpoints
 (`/api/summary`, `/api/integrations`) and `POST /api/chat`, and a much stricter zone for
 `POST /api/demo/trigger` specifically, since it's the one endpoint here with a real side effect
 (publishing to Kafka) and is only ever click-driven, never polled.
+
+These zones key on `$binary_remote_addr`, which is **not** a reliable per-browser identifier here,
+so treat them as a coarse-grained blast-radius bound rather than true per-client throttling:
+without the auth gate, nginx's only visible peer is the OpenShift Route's router, so in practice
+the bucket is shared per router replica, not per external client. With the auth gate on, nginx's
+only visible peer is the oauth-proxy sidecar on `127.0.0.1`, so it collapses further into a single
+bucket shared by every authenticated user hitting that pod. A real per-client fix would need
+`ngx_http_realip_module` trusting a specific upstream's `X-Forwarded-For`, but the outermost hop
+(the OpenShift router) doesn't have a fixed, cluster-independent IP range this chart could safely
+trust — trusting the wrong range would make the header spoofable and defeat the limit entirely.
+This is accepted as-is since rate limiting here is defense-in-depth underneath the real access
+control (the login gate itself, or the blast-radius bound in the default demo mode).
 
 ## Environment Variables
 

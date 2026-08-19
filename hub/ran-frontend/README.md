@@ -97,7 +97,7 @@ hub/ran-frontend/
 ├── vite.config.js        # Dev server + API proxy
 ├── index.html            # SPA entry
 ├── Containerfile         # Multi-stage build (node → nginx)
-├── nginx.conf            # Reverse proxy for /api/* -> hub-ran-chatbot-service
+├── nginx.conf.template   # Reverse proxy for /api/* -> hub-ran-chatbot-service (envsubst'd at startup)
 └── src/
     ├── main.jsx          # React root
     ├── App.jsx           # Layout orchestrator
@@ -153,12 +153,35 @@ carries the resulting session cookie automatically, so neither button needs any 
 `npm run dev` and `oc port-forward` workflows are unaffected either way. This is off by default so
 it doesn't change behavior for existing installs or break the demo recording flow.
 
-Independently of that toggle, `nginx.conf` always rate-limits `/api/*` (see the `limit_req_zone`
+Enabling the gate also switches nginx from listening on `0.0.0.0:8080` to `127.0.0.1:8080` only
+(an `NGINX_LISTEN_ADDRESS` env override into the templated `nginx.conf.template`) — otherwise any
+in-cluster client could still hit the pod's IP on `8080` directly and skip OAuth entirely, even
+with the Service pointed at the sidecar. Liveness/readiness probes switch to an `exec`-based
+`wget` check for the same reason: httpGet probes connect to the pod's routable IP, not loopback,
+so they can't reach a loopback-only nginx.
+
+**Note:** defaulting this to off (and letting it be disabled at all) is a QuickStart/demo
+convenience, not something a released product should ship — see the comment on
+`global.frontendAuth` in `hub/helm/values.yaml`.
+
+Independently of that toggle, `nginx.conf.template` always rate-limits `/api/*` (see the `limit_req_zone`
 and `map` directives at the top of the file): a generous zone for the polled `GET /api/anomalies`
 traffic, and a much stricter zone — shared between `POST /api/demo/trigger` and
 `DELETE /api/anomalies` — since both are click-driven, never polled, and are the two endpoints with
 real side effects. A `map` on `$request_method` keeps `GET /api/anomalies` out of the strict zone
 even though it shares a path with `DELETE /api/anomalies`.
+
+These zones key on `$binary_remote_addr`, which is **not** a reliable per-browser identifier here,
+so treat them as a coarse-grained blast-radius bound rather than true per-client throttling:
+without the auth gate, nginx's only visible peer is the OpenShift Route's router, so in practice
+the bucket is shared per router replica, not per external client. With the auth gate on, nginx's
+only visible peer is the oauth-proxy sidecar on `127.0.0.1`, so it collapses further into a single
+bucket shared by every authenticated user hitting that pod. A real per-client fix would need
+`ngx_http_realip_module` trusting a specific upstream's `X-Forwarded-For`, but the outermost hop
+(the OpenShift router) doesn't have a fixed, cluster-independent IP range this chart could safely
+trust — trusting the wrong range would make the header spoofable and defeat the limit entirely.
+This is accepted as-is since rate limiting here is defense-in-depth underneath the real access
+control (the login gate itself, or the blast-radius bound in the default demo mode).
 
 ## Environment Variables
 
