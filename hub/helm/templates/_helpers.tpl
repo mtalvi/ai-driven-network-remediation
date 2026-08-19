@@ -116,3 +116,19 @@ context, i.e. $).
       containerPort: 8888
       protocol: TCP
 {{- end }}
+
+{{/*
+Liveness/readiness probe body for the frontend/ran-frontend nginx container
+when global.frontendAuth.enabled is true. Kubernetes httpGet probes connect to
+the pod's routable IP, not loopback, so they can't be used once nginx is bound
+to 127.0.0.1 only (see NGINX_LISTEN_ADDRESS in nginx.conf.template) -- exec
+probes run inside the container's own network namespace instead, so
+127.0.0.1 still resolves correctly regardless of what the pod's external
+interface is bound to.
+*/}}
+{{- define "hub.nginxLoopbackProbe" -}}
+exec:
+  command: ["wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/"]
+initialDelaySeconds: 5
+periodSeconds: 10
+{{- end }}
