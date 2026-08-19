@@ -1,3 +1,11 @@
+# NOTE: $binary_remote_addr is not a reliable per-browser key here -- nginx's
+# only visible peer is the OpenShift Route's router (or, with the oauth-proxy
+# gate on, the sidecar at 127.0.0.1), not the original client. So these zones
+# are a coarse blast-radius bound (per router replica, or fully shared once
+# the gate is on), not true per-client throttling. See "Access control" in
+# hub/ran-frontend/README.md for why a real fix (trusted X-Forwarded-For)
+# isn't safe to add generically here.
+#
 # /api/anomalies is polled with GET but also takes DELETE (the "Clear" button);
 # /api/demo/trigger only ever takes POST. Key by remote addr for every method
 # except GET, so GET traffic (the polled case) never counts against the strict
@@ -21,7 +29,17 @@ limit_req_zone $binary_remote_addr zone=ran_api_read:10m  rate=100r/m;
 limit_req_zone $api_write_key      zone=ran_api_write:10m rate=6r/m;
 
 server {
-    listen 8080;
+    # NGINX_LISTEN_ADDRESS defaults to 0.0.0.0 (see Containerfile) so the Service
+    # can reach this container directly when global.frontendAuth.enabled is
+    # false. When that gate is on, Helm overrides it to 127.0.0.1 so this
+    # container is reachable only from the oauth-proxy sidecar sharing this
+    # pod's network namespace (its `--upstream=http://localhost:8080`) --
+    # otherwise any in-cluster client could hit this pod's IP on 8080 directly
+    # and skip OAuth entirely, bypassing the Service/targetPort switch.
+    # Substituted by the base image's docker-entrypoint.d/20-envsubst-on-templates.sh
+    # at container startup; nginx's own $-prefixed variables below (e.g. $host)
+    # are untouched since they aren't real environment variables.
+    listen ${NGINX_LISTEN_ADDRESS}:8080;
     server_name _;
 
     root /usr/share/nginx/html;
