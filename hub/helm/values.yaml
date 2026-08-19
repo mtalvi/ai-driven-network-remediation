@@ -26,8 +26,21 @@ global:
   # "click a demo button, no login needed" experience documented in
   # docs/RAN-DEMO-SCRIPT.md and docs/LIGHTSPEED-DEMO-SCRIPT.md keeps working
   # out of the box; turn on for shared/persistent clusters.
+  #
+  # NOTE: leaving these Routes able to skip authentication at all is a
+  # QuickStart/demo convenience, not something a released product should ship.
+  # Before this repo becomes more than a QuickStart (e.g. any packaged/GA
+  # release), remove the ability to disable this gate entirely -- it should be
+  # mandatory-on, not an opt-in toggle defaulting to off.
   frontendAuth:
     enabled: false
+    # Deliberately left on :latest rather than pinned, unlike this chart's other
+    # images: quay.io/openshift/origin-oauth-proxy tags track OpenShift cluster
+    # minor versions (4.17, 4.18, ...), and upstream guidance is to match your
+    # own cluster's version. Pinning one specific tag here would silently be
+    # wrong for anyone running this QuickStart against a different OCP version
+    # than whichever we hardcoded. Override with --set global.frontendAuth.image=...
+    # if you want to pin to a tag matching a specific cluster.
     image: "quay.io/openshift/origin-oauth-proxy:latest"
 
 # ══════════════════════════════════════════════════════════════════════
