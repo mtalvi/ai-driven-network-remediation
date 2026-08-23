@@ -46,6 +46,7 @@ CHATBOT_IMG        := $(REGISTRY)/noc-chatbot-service:$(VERSION)
 INGESTION_IMG      := $(REGISTRY)/noc-ingestion-pipeline:$(VERSION)
 AGENT_IMG          := $(REGISTRY)/noc-agent-service:$(VERSION)
 RAN_ANOMALY_IMG    := $(REGISTRY)/noc-ran-anomaly-detector:$(VERSION)
+RAN_ML_SERVICE_IMG := $(REGISTRY)/noc-ran-ml-service:$(VERSION)
 RAN_RCA_IMG        := $(REGISTRY)/noc-ran-rca-service:$(VERSION)
 RAN_CHATBOT_IMG    := $(REGISTRY)/noc-ran-chatbot-service:$(VERSION)
 RAN_FRONTEND_IMG   := $(REGISTRY)/noc-ran-frontend:$(VERSION)
@@ -60,10 +61,13 @@ MCP_CONTAINERFILE           := hub/mcp-servers/Containerfile
 MCP_OPENSHIFT_CONTAINERFILE := hub/mcp-servers/Containerfile.openshift
 MCP_CONTEXT                 := hub/mcp-servers
 
-# ran-anomaly-detector depends on the sibling telco-oran package via a local
+# ran-anomaly-detector depends on the sibling shared package via a local
 # uv path source, so its build context must be `hub/`, not its own directory.
 RAN_ANOMALY_CONTAINERFILE   := hub/ran-anomaly-detector/Containerfile
 RAN_ANOMALY_CONTEXT         := hub
+
+RAN_ML_SERVICE_CONTAINERFILE := hub/ran-ml-service/Containerfile
+RAN_ML_SERVICE_CONTEXT       := hub
 
 RAN_RCA_CONTAINERFILE       := hub/ran-rca-service/Containerfile
 RAN_RCA_CONTEXT             := hub
@@ -163,6 +167,7 @@ NETWORK_IMAGES := \
 
 TELCO_IMAGES := \
 	$(RAN_ANOMALY_IMG) \
+	$(RAN_ML_SERVICE_IMG) \
 	$(RAN_RCA_IMG) \
 	$(RAN_CHATBOT_IMG) \
 	$(RAN_FRONTEND_IMG)
@@ -308,6 +313,7 @@ helm_all_args = \
 	--set image.ingestionPipeline=noc-ingestion-pipeline \
 	--set image.agentService=noc-agent-service \
 	--set image.ranAnomalyDetector=noc-ran-anomaly-detector \
+	--set image.ranMlService=noc-ran-ml-service \
 	--set image.ranRcaService=noc-ran-rca-service \
 	--set image.ranChatbotService=noc-ran-chatbot-service \
 	--set image.ranFrontend=noc-ran-frontend \
@@ -610,7 +616,7 @@ edge-rbac-teardown:
 .PHONY: build-all-images
 build-all-images: build-ingestion-image build-mcp-images \
 	$(if $(filter true,$(ENABLE_NETWORK_REMEDIATION)),build-chatbot-image build-agent-image build-frontend-image) \
-	$(if $(filter true,$(ENABLE_TELCO_ORAN)),build-ran-anomaly-image build-ran-rca-image build-ran-chatbot-image build-ran-frontend-image)
+	$(if $(filter true,$(ENABLE_TELCO_ORAN)),build-ran-anomaly-image build-ran-ml-service-image build-ran-rca-image build-ran-chatbot-image build-ran-frontend-image)
 
 .PHONY: build-ingestion-image
 build-ingestion-image:
@@ -627,6 +633,10 @@ build-agent-image:
 .PHONY: build-ran-anomaly-image
 build-ran-anomaly-image:
 	$(CONTAINER_TOOL) build -t $(RAN_ANOMALY_IMG) --platform=$(ARCH) -f $(RAN_ANOMALY_CONTAINERFILE) $(RAN_ANOMALY_CONTEXT)
+
+.PHONY: build-ran-ml-service-image
+build-ran-ml-service-image:
+	$(CONTAINER_TOOL) build -t $(RAN_ML_SERVICE_IMG) --platform=$(ARCH) -f $(RAN_ML_SERVICE_CONTAINERFILE) $(RAN_ML_SERVICE_CONTEXT)
 
 .PHONY: build-ran-rca-image
 build-ran-rca-image:

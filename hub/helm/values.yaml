@@ -5,6 +5,7 @@ image:
   ingestionPipeline: hub-ingestion-pipeline
   agentService: hub-agent-service
   ranAnomalyDetector: hub-ran-anomaly-detector
+  ranMlService: noc-ran-ml-service
   ranRcaService: hub-ran-rca-service
   ranChatbotService: hub-ran-chatbot-service
   ranFrontend: noc-ran-frontend
@@ -490,7 +491,9 @@ agentService:
     periodSeconds: 10
 
 # ══════════════════════════════════════════════════════════════════════
-# RAN Anomaly Detector (Telco/O-RAN) — independent, rule-based workflow.
+# RAN Anomaly Detector (Telco/O-RAN) — ML-based detection workflow.
+# Consumes TelecomTS JSON samples from Kafka, calls ran-ml-service for
+# binary AD, publishes typeless anomalies to ran-anomalies.
 # Gated by global.telcoOran.enabled (the whole Telco/O-RAN use case).
 # ══════════════════════════════════════════════════════════════════════
 
@@ -504,7 +507,7 @@ ranAnomalyDetector:
     kafkaConsumerEnabled: "true"
     kafkaAnomaliesTopic: "ran-anomalies"
     kafkaProducerEnabled: "true"
-    historyWindowSize: "10"
+    detectInferenceUrl: "http://hub-ran-ml-service:8080/v1/detect"
     recentAnomaliesLimit: "100"
   service:
     type: ClusterIP
@@ -522,6 +525,37 @@ ranAnomalyDetector:
       path: /ready
       port: 8002
     initialDelaySeconds: 10
+    periodSeconds: 10
+
+# ══════════════════════════════════════════════════════════════════════
+# RAN ML Service (Telco/O-RAN) — Mantis AD predictor for binary anomaly
+# detection on TelecomTS 5G lab traces. Shared image with APPENG-6062
+# (TASK=classify). Detect is mandatory; detector /ready requires this.
+# ══════════════════════════════════════════════════════════════════════
+
+ranMlService:
+  enabled: true
+  replicaCount: 1
+  env:
+    task: "detect"
+    mantisModelPath: "/models/mantis_pretrained_ad.pt"
+    mlflowModelUri: ""
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  resources: {}
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 30
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    initialDelaySeconds: 15
     periodSeconds: 10
 
 # ══════════════════════════════════════════════════════════════════════

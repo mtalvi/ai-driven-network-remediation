@@ -1,0 +1,64 @@
+{{- if and .Values.global.telcoOran.enabled .Values.ranMlService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hub.fullname" . }}-ran-ml-service
+  labels:
+    {{- include "hub.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ran-ml-service
+spec:
+  replicas: {{ .Values.ranMlService.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hub.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ran-ml-service
+  template:
+    metadata:
+      labels:
+        {{- include "hub.labels" . | nindent 8 }}
+        app.kubernetes.io/component: ran-ml-service
+    spec:
+      containers:
+        - name: ran-ml-service
+          image: "{{ .Values.image.registry }}/{{ .Values.image.ranMlService }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: TASK
+              value: {{ .Values.ranMlService.env.task | quote }}
+            - name: MANTIS_MODEL_PATH
+              value: {{ .Values.ranMlService.env.mantisModelPath | quote }}
+            {{- if .Values.ranMlService.env.mlflowModelUri }}
+            - name: MLFLOW_MODEL_URI
+              value: {{ .Values.ranMlService.env.mlflowModelUri | quote }}
+            {{- end }}
+            - name: PORT
+              value: "8080"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.ranMlService.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.ranMlService.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.ranMlService.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hub.fullname" . }}-ran-ml-service
+  labels:
+    {{- include "hub.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ran-ml-service
+spec:
+  type: {{ .Values.ranMlService.service.type }}
+  ports:
+    - port: {{ .Values.ranMlService.service.port }}
+      targetPort: {{ .Values.ranMlService.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "hub.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ran-ml-service
+{{- end }}
