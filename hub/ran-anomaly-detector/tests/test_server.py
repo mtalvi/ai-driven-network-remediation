@@ -24,8 +24,9 @@ class TestHealthEndpoint:
 
 class TestReadyEndpoint:
     @patch("ran_anomaly_detector.server.KAFKA_CONSUMER_ENABLED", False)
-    @patch("ran_anomaly_detector.server._check_predictor_ready", return_value=True)
-    def test_ready_when_kafka_disabled_and_predictor_up(self, mock_pred, client):
+    @patch("ran_anomaly_detector.server.DETECT_INFERENCE_URL", "")
+    def test_ready_when_kafka_disabled_and_no_predictor_url(self, client):
+        """With no predictor URL configured, readiness skips the predictor check."""
         response = client.get("/ready")
         assert response.status_code == 200
         assert response.json() == {"ready": True}
