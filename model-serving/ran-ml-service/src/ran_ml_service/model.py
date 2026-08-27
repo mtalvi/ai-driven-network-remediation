@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger
 
-from .config import MANTIS_CHECKPOINT, MANTIS_MODEL_PATH, MLFLOW_MODEL_URI, TASK
+from .config import MANTIS_CHECKPOINT, MANTIS_MODEL_PATH, TASK
 
 PRETRAINED_SEQ_LEN = 512
 PRETRAINED_HIDDEN_DIM = 256
@@ -95,10 +95,10 @@ class MantisPredictor:
         return self._loaded
 
     def load(self) -> None:
-        """Load model weights from MANTIS_MODEL_PATH or MLFLOW_MODEL_URI."""
+        """Load model weights from MANTIS_MODEL_PATH."""
         weights_path = self._resolve_weights_path()
         if weights_path is None:
-            logger.warning("No model weights configured (MANTIS_MODEL_PATH / MLFLOW_MODEL_URI empty)")
+            logger.warning("No model weights configured (MANTIS_MODEL_PATH empty)")
             return
 
         logger.info("Loading model weights from: {}", weights_path)
@@ -135,27 +135,7 @@ class MantisPredictor:
             logger.error("MANTIS_MODEL_PATH does not exist: {}", MANTIS_MODEL_PATH)
             return None
 
-        if MLFLOW_MODEL_URI:
-            return self._download_from_mlflow()
-
         return None
-
-    def _download_from_mlflow(self) -> str | None:
-        try:
-            import mlflow
-
-            logger.info("Downloading model from MLflow: {}", MLFLOW_MODEL_URI)
-            model_path = mlflow.artifacts.download_artifacts(MLFLOW_MODEL_URI)
-            weights_file = Path(model_path) / "artifacts" / "weights"
-            if weights_file.exists():
-                return str(weights_file)
-            for pt_file in Path(model_path).rglob("*.pt"):
-                return str(pt_file)
-            logger.error("No .pt file found in MLflow artifact: {}", model_path)
-            return None
-        except Exception:
-            logger.exception("Failed to download from MLflow")
-            return None
 
     def preprocess(self, kpi_window: list[dict]) -> torch.Tensor:
         """Convert JSON kpi_window (128 timesteps x 18 channels) to model input tensor.

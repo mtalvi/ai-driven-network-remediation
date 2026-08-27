@@ -168,7 +168,7 @@ of normal traffic.
 | Anomaly Precision/Recall | 92% / 98% |
 | Inference | CPU-only, ~5ms per sample |
 | Serving | FastAPI (`ran-ml-service`), port 8080 |
-| Weights | `mantis_pretrained_ad.pt` (31MB, loaded from local path or MLflow URI) |
+| Weights | Fine-tuned `.pt` checkpoint loaded from `MANTIS_MODEL_PATH`; HuggingFace backbone (`paris-noah/Mantis-8M`) baked into the OCI image |
 
 The model was trained by Alan (see PR #127) using the TelecomTS benchmark pipeline with
 inverse-frequency class weights for the 96/4 normal/anomaly imbalance.
@@ -179,7 +179,7 @@ inverse-frequency class weights for the 96/4 normal/anomaly imbalance.
 
 | Component | Role |
 |---|---|
-| **`ran-ml-service`** | Serves the Mantis AD model. `POST /v1/detect` takes a 128×18 kpi_window and returns `anomalous`/`normal` + confidence. `/ready` requires model loaded. |
+| **`ran-ml-service`** | Self-contained ML predictor (lives in `model-serving/ran-ml-service/`, decoupled from the hub chart). Serves the Mantis AD model via `POST /v1/detect` (128×18 kpi_window → `anomalous`/`normal` + confidence). Deployed as a KServe `InferenceService` or standalone container. `/ready` requires model loaded. |
 | **`ran-anomaly-detector`** | Kafka consumer + orchestrator. Deserializes JSON samples, calls the predictor, publishes only anomalous windows. `/ready` requires both Kafka and predictor. |
 | **`ran-rca-service`** | LangGraph pipeline (rag_retrieval → analyze). Adds `root_cause` + `recommended_fix` via RAG + Granite LLM. |
 | **`ran-chatbot-service`** | Thin BFF. Buffers enriched anomalies, exposes `/api/chat` + `/api/anomalies` + `/api/demo/trigger`. |
@@ -193,17 +193,16 @@ inverse-frequency class weights for the 96/4 normal/anomaly imbalance.
 
 | What | Where |
 |---|---|
-| ML predictor service | [`hub/ran-ml-service/`](../hub/ran-ml-service/) |
+| ML predictor service | [`model-serving/ran-ml-service/`](../model-serving/ran-ml-service/) (self-contained, decoupled from hub) |
+| Training notebook | [`model-serving/training/notebooks/telecomts_model_evaluation.ipynb`](../model-serving/training/notebooks/telecomts_model_evaluation.ipynb) |
 | Anomaly detection orchestrator | [`hub/ran-anomaly-detector/`](../hub/ran-anomaly-detector/) |
 | Root cause analysis service | [`hub/ran-rca-service/`](../hub/ran-rca-service/), see [`docs/telco-oran-rca.md`](telco-oran-rca.md) |
 | Chatbot entrypoint | [`hub/ran-chatbot-service/`](../hub/ran-chatbot-service/) |
 | RAN webapp | [`hub/ran-frontend/`](../hub/ran-frontend/) |
 | TelecomTS fixture catalog | [`hub/telco-oran/src/telco_oran/fixtures/`](../hub/telco-oran/src/telco_oran/fixtures/) + `catalog.py` |
-| Model weights (git-lfs) | [`training/models/mantis_pretrained_ad.pt`](../training/models/mantis_pretrained_ad.pt) |
-| Training notebook | [`training/notebooks/telecomts_model_evaluation.ipynb`](../training/notebooks/telecomts_model_evaluation.ipynb) |
 | Contracts | [`contracts/ran-anomalies.schema.json`](../contracts/ran-anomalies.schema.json), [`contracts/ran-anomaly-enriched.schema.json`](../contracts/ran-anomaly-enriched.schema.json) |
 | Helm templates | `hub/helm/templates/ran-*.yaml` |
-| Helm values | [`hub/helm/values.yaml`](../hub/helm/values.yaml) (`ranMlService:`, `ranAnomalyDetector:`, `ranRcaService:`, `ranChatbotService:`, `ranFrontend:`) |
+| Helm values | [`hub/helm/values.yaml`](../hub/helm/values.yaml) (`ranAnomalyDetector:`, `ranRcaService:`, `ranChatbotService:`, `ranFrontend:`) |
 | Demo recording script | [`docs/RAN-DEMO-SCRIPT.md`](RAN-DEMO-SCRIPT.md) |
 
 ---
@@ -229,8 +228,9 @@ inverse-frequency class weights for the 96/4 normal/anomaly imbalance.
 3. **Identity is `incident_id` + zone/application** — not cell_id/band/anomaly_type (those are
    rule-engine concepts that don't apply to ML-based detection).
 4. **Detect is mandatory** — the detector's `/ready` probe requires the predictor. No skip flag.
-5. **Image is code, not weights** — the OCI image contains the FastAPI app + model architecture;
-   weights are loaded at startup from `MANTIS_MODEL_PATH` or `MLFLOW_MODEL_URI`.
+5. **Self-contained image** — the OCI image contains the FastAPI app, model architecture, and
+   the HuggingFace backbone (`paris-noah/Mantis-8M`) baked in (`HF_HUB_OFFLINE=1`).
+   Fine-tuned task weights are loaded at startup from `MANTIS_MODEL_PATH`.
 6. **Same image for detect and classify** — APPENG-6062 adds `TASK=classify` to the same
    `ran-ml-service` image with a different artifact and InferenceService.
 7. **Fixtures are checked in** — demos don't fetch from HuggingFace at click time.

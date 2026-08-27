@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-FIXTURES_DIR = Path(__file__).resolve().parents[2] / "telco-oran" / "src" / "telco_oran" / "fixtures"
+FIXTURES_DIR = Path(__file__).resolve().parents[3] / "hub" / "telco-oran" / "src" / "telco_oran" / "fixtures"
 
 
 @pytest.fixture

@@ -45,6 +45,7 @@ endif
 CHATBOT_IMG        := $(REGISTRY)/noc-chatbot-service:$(VERSION)
 INGESTION_IMG      := $(REGISTRY)/noc-ingestion-pipeline:$(VERSION)
 AGENT_IMG          := $(REGISTRY)/noc-agent-service:$(VERSION)
+RAN_ML_SERVICE_IMG := $(REGISTRY)/noc-ran-ml-service:$(VERSION)
 RAN_ANOMALY_IMG    := $(REGISTRY)/noc-ran-anomaly-detector:$(VERSION)
 RAN_RCA_IMG        := $(REGISTRY)/noc-ran-rca-service:$(VERSION)
 RAN_CHATBOT_IMG    := $(REGISTRY)/noc-ran-chatbot-service:$(VERSION)
@@ -67,6 +68,10 @@ RAN_ANOMALY_CONTEXT         := hub
 
 RAN_RCA_CONTAINERFILE       := hub/ran-rca-service/Containerfile
 RAN_RCA_CONTEXT             := hub
+
+# ran-ml-service is self-contained (no shared dep); context is its own dir.
+RAN_ML_SERVICE_CONTAINERFILE := model-serving/ran-ml-service/Containerfile
+RAN_ML_SERVICE_CONTEXT       := model-serving/ran-ml-service
 
 # agent-service, chatbot-service, and ran-chatbot-service all depend on the
 # sibling shared package via a local uv path source, so their build context
@@ -162,6 +167,7 @@ NETWORK_IMAGES := \
 	$(FRONTEND_IMG)
 
 TELCO_IMAGES := \
+	$(RAN_ML_SERVICE_IMG) \
 	$(RAN_ANOMALY_IMG) \
 	$(RAN_RCA_IMG) \
 	$(RAN_CHATBOT_IMG) \
@@ -610,7 +616,7 @@ edge-rbac-teardown:
 .PHONY: build-all-images
 build-all-images: build-ingestion-image build-mcp-images \
 	$(if $(filter true,$(ENABLE_NETWORK_REMEDIATION)),build-chatbot-image build-agent-image build-frontend-image) \
-	$(if $(filter true,$(ENABLE_TELCO_ORAN)),build-ran-anomaly-image build-ran-rca-image build-ran-chatbot-image build-ran-frontend-image)
+	$(if $(filter true,$(ENABLE_TELCO_ORAN)),build-ran-ml-service-image build-ran-anomaly-image build-ran-rca-image build-ran-chatbot-image build-ran-frontend-image)
 
 .PHONY: build-ingestion-image
 build-ingestion-image:
@@ -623,6 +629,10 @@ build-chatbot-image:
 .PHONY: build-agent-image
 build-agent-image:
 	$(CONTAINER_TOOL) build -t $(AGENT_IMG) --platform=$(ARCH) -f $(AGENT_CONTAINERFILE) $(AGENT_CONTEXT)
+
+.PHONY: build-ran-ml-service-image
+build-ran-ml-service-image:
+	$(CONTAINER_TOOL) build -t $(RAN_ML_SERVICE_IMG) --platform=$(ARCH) -f $(RAN_ML_SERVICE_CONTAINERFILE) $(RAN_ML_SERVICE_CONTEXT)
 
 .PHONY: build-ran-anomaly-image
 build-ran-anomaly-image:
@@ -787,6 +797,7 @@ unit-tests:
 	cd hub/ran-anomaly-detector && uv sync --group dev && uv run pytest
 	cd hub/ran-rca-service && uv sync --group dev && uv run pytest
 	cd hub/ran-chatbot-service && uv sync --group dev && uv run pytest
+	cd model-serving/ran-ml-service && uv sync --group dev && uv run pytest
 
 # Offline multi-cluster template / dry-run tests (no live ACM). C8.
 # helm-depend is required: hub template tests need Chart.yaml deps (pgvector,
