@@ -167,7 +167,6 @@ NETWORK_IMAGES := \
 	$(FRONTEND_IMG)
 
 TELCO_IMAGES := \
-	$(RAN_ML_SERVICE_IMG) \
 	$(RAN_ANOMALY_IMG) \
 	$(RAN_RCA_IMG) \
 	$(RAN_CHATBOT_IMG) \
@@ -616,7 +615,7 @@ edge-rbac-teardown:
 .PHONY: build-all-images
 build-all-images: build-ingestion-image build-mcp-images \
 	$(if $(filter true,$(ENABLE_NETWORK_REMEDIATION)),build-chatbot-image build-agent-image build-frontend-image) \
-	$(if $(filter true,$(ENABLE_TELCO_ORAN)),build-ran-ml-service-image build-ran-anomaly-image build-ran-rca-image build-ran-chatbot-image build-ran-frontend-image)
+	$(if $(filter true,$(ENABLE_TELCO_ORAN)),build-ran-anomaly-image build-ran-rca-image build-ran-chatbot-image build-ran-frontend-image)
 
 .PHONY: build-ingestion-image
 build-ingestion-image:
@@ -797,7 +796,6 @@ unit-tests:
 	cd hub/ran-anomaly-detector && uv sync --group dev && uv run pytest
 	cd hub/ran-rca-service && uv sync --group dev && uv run pytest
 	cd hub/ran-chatbot-service && uv sync --group dev && uv run pytest
-	cd model-serving/ran-ml-service && uv sync --group dev && uv run pytest
 
 # Offline multi-cluster template / dry-run tests (no live ACM). C8.
 # helm-depend is required: hub template tests need Chart.yaml deps (pgvector,

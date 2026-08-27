@@ -14,5 +14,5 @@ Mantis time-series ML predictor for TelecomTS anomaly detection (TASK=detect) an
 |---------|-------------|
 | `TASK` | `detect` or `classify` |
 | `MANTIS_MODEL_PATH` | Local path to `.pt` weights file |
-| `MLFLOW_MODEL_URI` | MLflow model URI (alternative to local path) |
+| `MANTIS_CHECKPOINT` | HuggingFace backbone ID (default: `paris-noah/Mantis-8M`, baked into image) |
 | `PORT` | HTTP port (default: 8080) |
