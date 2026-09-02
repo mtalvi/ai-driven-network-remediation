@@ -633,6 +633,10 @@ build-agent-image:
 build-ran-ml-service-image:
 	$(CONTAINER_TOOL) build -t $(RAN_ML_SERVICE_IMG) --platform=$(ARCH) -f $(RAN_ML_SERVICE_CONTAINERFILE) $(RAN_ML_SERVICE_CONTEXT)
 
+.PHONY: build-push-ran-ml-service
+build-push-ran-ml-service: build-ran-ml-service-image
+	$(CONTAINER_TOOL) push $(RAN_ML_SERVICE_IMG) $(PUSH_EXTRA_ARGS)
+
 .PHONY: build-ran-anomaly-image
 build-ran-anomaly-image:
 	$(CONTAINER_TOOL) build -t $(RAN_ANOMALY_IMG) --platform=$(ARCH) -f $(RAN_ANOMALY_CONTAINERFILE) $(RAN_ANOMALY_CONTEXT)
