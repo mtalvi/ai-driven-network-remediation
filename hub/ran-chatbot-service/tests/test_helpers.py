@@ -73,6 +73,21 @@ class TestBuildChatContext:
         for i in range(0, 2):
             assert f"Incident inc-{i}:" not in prompt
 
+    def test_remediation_missing_success_key_is_labeled_pending_not_failed(self, sample_remediation):
+        """RemediationConsumer doesn't schema-validate, so a malformed/older-schema
+        record could be missing `success` entirely — that must read as "pending"
+        (unknown outcome), not be silently reported as a definite "failed"."""
+        unknown = {k: v for k, v in sample_remediation.items() if k != "success"}
+        prompt = build_chat_context("What's the status?", [], [unknown], [])
+        assert "test-001: pending" in prompt
+        assert "test-001: failed" not in prompt
+
+    def test_remediation_missing_timed_out_key_renders_as_false_not_none(self, sample_remediation):
+        no_timed_out = {k: v for k, v in sample_remediation.items() if k != "timed_out"}
+        prompt = build_chat_context("Did it time out?", [], [no_timed_out], [])
+        assert "timed_out=False" in prompt
+        assert "timed_out=None" not in prompt
+
 
 class TestCallModel:
     @pytest.mark.asyncio

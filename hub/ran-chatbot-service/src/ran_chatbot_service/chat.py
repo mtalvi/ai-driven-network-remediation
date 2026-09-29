@@ -11,13 +11,18 @@ from .models import EnrichedAnomaly, ModelSource
 
 logger = logging.getLogger(__name__)
 
+# Caps how many of the most recent buffered items go into the LLM prompt, so the
+# context stays bounded even as the underlying deques fill up toward their much
+# larger maxlen (ENRICHED_ANOMALIES_MAX_MESSAGES / REMEDIATION_RESULTS_MAX_MESSAGES).
+_MAX_ITEMS_IN_PROMPT = 5
+
 
 def _format_anomalies(anomalies: list[EnrichedAnomaly]) -> str:
     """Format enriched RAN anomalies for LLM context."""
     if not anomalies:
         return "No recent RAN anomalies detected."
     lines = []
-    for a in anomalies[-5:]:
+    for a in anomalies[-_MAX_ITEMS_IN_PROMPT:]:
         lines.append(
             f"  - Incident {a.incident_id} (zone={a.zone}, app={a.application}) "
             f"[AD confidence: {a.ad_confidence:.2f}]\n"
@@ -27,17 +32,34 @@ def _format_anomalies(anomalies: list[EnrichedAnomaly]) -> str:
     return "\n".join(lines)
 
 
+def _remediation_status(record: dict) -> str:
+    """"successful"/"failed" reflect a completed remediation attempt: audit records
+    are only published by ran-remediation-service's audit_node after remediate_node
+    has already polled the AAP job to a terminal state (or given up), so `success`
+    is always a definite bool in practice — never a "pending"/"in-progress" record.
+
+    Still, RemediationConsumer doesn't schema-validate these dicts (unlike
+    EnrichedAnomaly), so a malformed or older-schema message could be missing the
+    `success` key entirely. Treat that as "pending" (unknown) rather than silently
+    reporting a fix as "failed" when we don't actually know its outcome.
+    """
+    success = record.get("success")
+    if success is None:
+        return "pending"
+    return "successful" if success else "failed"
+
+
 def _format_remediations(remediations: list[dict]) -> str:
     """Format recent remediation results for LLM context."""
     if not remediations:
         return "No recent remediation results."
     lines = []
-    for r in remediations[-5:]:
-        status = "successful" if r.get("success") else "failed"
+    for r in remediations[-_MAX_ITEMS_IN_PROMPT:]:
+        status = _remediation_status(r)
         lines.append(
             f"  - Incident {r.get('incident_id')}: {status} "
             f"(template={r.get('template_name') or 'n/a'}, job_status={r.get('job_status') or 'n/a'}, "
-            f"timed_out={r.get('timed_out')})\n"
+            f"timed_out={r.get('timed_out', False)})\n"
             f"    Output: {r.get('output_summary') or 'n/a'}"
         )
     return "\n".join(lines)
@@ -63,8 +85,8 @@ def build_chat_context(
         "When discussing an anomaly, mention: the incident ID, zone, application context, "
         "the AD confidence score, the likely root cause, and the recommended fix (including "
         "which vendor documentation section it references).\n"
-        "When discussing remediation status, mention whether the fix succeeded or failed, "
-        "the job status, and whether it timed out.\n"
+        "When discussing remediation status, mention whether the fix succeeded, failed, or is "
+        "pending (outcome not yet known), the job status, and whether it timed out.\n"
         "Do NOT mention cell IDs, bands, or rule-based anomaly types — this system uses "
         "ML-based detection on full KPI windows.\n"
         "Keep output under 250 words.\n\n"
