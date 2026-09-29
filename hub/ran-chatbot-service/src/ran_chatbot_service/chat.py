@@ -27,15 +27,33 @@ def _format_anomalies(anomalies: list[EnrichedAnomaly]) -> str:
     return "\n".join(lines)
 
 
+def _format_remediations(remediations: list[dict]) -> str:
+    """Format recent remediation results for LLM context."""
+    if not remediations:
+        return "No recent remediation results."
+    lines = []
+    for r in remediations[-5:]:
+        status = "successful" if r.get("success") else "failed"
+        lines.append(
+            f"  - Incident {r.get('incident_id')}: {status} "
+            f"(template={r.get('template_name') or 'n/a'}, job_status={r.get('job_status') or 'n/a'}, "
+            f"timed_out={r.get('timed_out')})\n"
+            f"    Output: {r.get('output_summary') or 'n/a'}"
+        )
+    return "\n".join(lines)
+
+
 def build_chat_context(
     user_message: str,
     anomalies: list[EnrichedAnomaly],
+    remediations: list[dict],
     history: list[dict[str, str]],
 ) -> str:
     """Build a context-rich prompt for the LLM."""
     recent = history[-4:]
     convo = "\n".join(f"{item['role']}: {item['content']}" for item in recent) or "none"
     anomalies_context = _format_anomalies(anomalies)
+    remediations_context = _format_remediations(remediations)
 
     return (
         "You are a telco RAN engineer assistant for an O-RAN anomaly detection and root cause "
@@ -45,11 +63,14 @@ def build_chat_context(
         "When discussing an anomaly, mention: the incident ID, zone, application context, "
         "the AD confidence score, the likely root cause, and the recommended fix (including "
         "which vendor documentation section it references).\n"
+        "When discussing remediation status, mention whether the fix succeeded or failed, "
+        "the job status, and whether it timed out.\n"
         "Do NOT mention cell IDs, bands, or rule-based anomaly types — this system uses "
         "ML-based detection on full KPI windows.\n"
         "Keep output under 250 words.\n\n"
         f"Model: {MODEL_NAME}\n\n"
         f"Recently detected RAN anomalies:\n{anomalies_context}\n\n"
+        f"Recent remediation results:\n{remediations_context}\n\n"
         f"Recent conversation: {convo}\n\n"
         f"Operator request: {user_message}\n\n"
         "Your analysis:"
